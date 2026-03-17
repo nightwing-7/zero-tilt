@@ -7,10 +7,11 @@ export interface UrgeLog {
   trigger_type: string;
   trigger_details: string;
   coping_strategies: string[];
-  outcome: 'Resisted' | 'Gave in' | 'Distracted';
+  outcome: 'Resisted' | 'Gave in' | 'Distracted' | 'resisted' | 'gave_in' | 'distracted' | 'used_panic';
   notes: string;
   created_at: string;
   updated_at: string;
+  duration_seconds?: number;
 }
 
 export interface UrgeStats {

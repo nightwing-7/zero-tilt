@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from './useAuth';
+import { useAnalytics } from './useAnalytics';
 import {
   JournalEntry,
   getJournalEntries,
@@ -7,9 +8,19 @@ import {
   updateJournalEntry,
   deleteJournalEntry,
 } from '../services/journal';
+import {
+  saveDraft,
+  getDraft,
+  clearDraft,
+  hasDraft,
+  JournalDraft,
+} from '../services/journalDraft';
+import { checkAndUnlockMilestones } from '../services/milestoneEngine';
 
 export interface JournalState {
   entries: JournalEntry[];
+  draft: JournalDraft | null;
+  hasPendingDraft: boolean;
   loading: boolean;
   error: string | null;
   page: number;
@@ -17,8 +28,12 @@ export interface JournalState {
 
 export function useJournal() {
   const { user } = useAuth();
+  const { track } = useAnalytics();
+
   const [state, setState] = useState<JournalState>({
     entries: [],
+    draft: null,
+    hasPendingDraft: false,
     loading: true,
     error: null,
     page: 0,
@@ -28,6 +43,8 @@ export function useJournal() {
     if (!user?.id) {
       setState({
         entries: [],
+        draft: null,
+        hasPendingDraft: false,
         loading: false,
         error: null,
         page: 0,
@@ -37,10 +54,16 @@ export function useJournal() {
 
     const init = async () => {
       try {
-        const entries = await getJournalEntries(user.id, 50, 0);
+        const [entries, draftExists, draft] = await Promise.all([
+          getJournalEntries(user.id, 50, 0),
+          hasDraft(),
+          getDraft(),
+        ]);
 
         setState({
           entries,
+          draft,
+          hasPendingDraft: draftExists,
           loading: false,
           error: null,
           page: 0,
@@ -99,6 +122,55 @@ export function useJournal() {
     }
   }
 
+  async function saveDraftLocal(
+    entryId: string | undefined,
+    title: string,
+    content: string,
+    mood?: string,
+    tags?: string[]
+  ): Promise<void> {
+    try {
+      await saveDraft(entryId, title, content, mood, tags);
+      setState((prev) => ({
+        ...prev,
+        hasPendingDraft: true,
+        draft: { entryId, title, content, mood, tags, savedAt: Date.now() },
+      }));
+    } catch (error) {
+      console.error('Error saving draft:', error);
+    }
+  }
+
+  async function loadDraft(entryId?: string): Promise<JournalDraft | null> {
+    try {
+      const draft = await getDraft(entryId);
+      if (draft) {
+        setState((prev) => ({
+          ...prev,
+          draft,
+          hasPendingDraft: true,
+        }));
+      }
+      return draft;
+    } catch (error) {
+      console.error('Error loading draft:', error);
+      return null;
+    }
+  }
+
+  async function clearDraftLocal(entryId?: string): Promise<void> {
+    try {
+      await clearDraft(entryId);
+      setState((prev) => ({
+        ...prev,
+        draft: null,
+        hasPendingDraft: false,
+      }));
+    } catch (error) {
+      console.error('Error clearing draft:', error);
+    }
+  }
+
   async function create(entry: {
     title: string;
     content: string;
@@ -115,7 +187,22 @@ export function useJournal() {
         setState((prev) => ({
           ...prev,
           entries: [newEntry, ...prev.entries],
+          draft: null,
+          hasPendingDraft: false,
         }));
+
+        track('journal_entry_created', {
+          mood: entry.mood,
+          word_count: newEntry.word_count,
+        });
+
+        await clearDraftLocal();
+
+        try {
+          await checkAndUnlockMilestones(user.id);
+        } catch (error) {
+          console.error('Error checking milestones:', error);
+        }
       }
 
       return newEntry;
@@ -139,6 +226,16 @@ export function useJournal() {
           ...prev,
           entries: prev.entries.map((e) => (e.id === entryId ? updated : e)),
         }));
+
+        track('journal_entry_updated', {
+          word_count: updated.word_count,
+        });
+
+        try {
+          await checkAndUnlockMilestones(user.id);
+        } catch (error) {
+          console.error('Error checking milestones:', error);
+        }
       }
 
       return updated;
@@ -175,5 +272,8 @@ export function useJournal() {
     create,
     update,
     delete: remove,
+    saveDraft: saveDraftLocal,
+    loadDraft,
+    clearDraft: clearDraftLocal,
   };
 }

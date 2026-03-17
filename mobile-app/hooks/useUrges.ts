@@ -1,9 +1,12 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from './useAuth';
-import { UrgeLog, UrgeStats, logUrge, getUrgeHistory, getUrgeStats } from '../services/urges';
+import { useAnalytics } from './useAnalytics';
+import { UrgeLog, UrgeStats, logUrge, getUrgeHistory, getUrgeStats, getTodaysUrges } from '../services/urges';
+import { checkAndUnlockMilestones } from '../services/milestoneEngine';
 
 export interface UsesUrgeState {
   urges: UrgeLog[];
+  todaysUrges: UrgeLog[];
   stats: UrgeStats | null;
   loading: boolean;
   error: string | null;
@@ -11,8 +14,11 @@ export interface UsesUrgeState {
 
 export function useUrges() {
   const { user } = useAuth();
+  const { track } = useAnalytics();
+
   const [state, setState] = useState<UsesUrgeState>({
     urges: [],
+    todaysUrges: [],
     stats: null,
     loading: true,
     error: null,
@@ -22,6 +28,7 @@ export function useUrges() {
     if (!user?.id) {
       setState({
         urges: [],
+        todaysUrges: [],
         stats: null,
         loading: false,
         error: null,
@@ -31,13 +38,15 @@ export function useUrges() {
 
     const init = async () => {
       try {
-        const [urges, stats] = await Promise.all([
+        const [urges, todaysUrges, stats] = await Promise.all([
           getUrgeHistory(user.id, 50),
+          getTodaysUrges(user.id),
           getUrgeStats(user.id),
         ]);
 
         setState({
           urges,
+          todaysUrges,
           stats,
           loading: false,
           error: null,
@@ -61,13 +70,15 @@ export function useUrges() {
     try {
       setState((prev) => ({ ...prev, loading: true }));
 
-      const [urges, stats] = await Promise.all([
+      const [urges, todaysUrges, stats] = await Promise.all([
         getUrgeHistory(user.id, 50),
+        getTodaysUrges(user.id),
         getUrgeStats(user.id),
       ]);
 
       setState({
         urges,
+        todaysUrges,
         stats,
         loading: false,
         error: null,
@@ -87,7 +98,7 @@ export function useUrges() {
     trigger_type: string;
     trigger_details: string;
     coping_strategies: string[];
-    outcome: 'Resisted' | 'Gave in' | 'Distracted';
+    outcome: 'Resisted' | 'Gave in' | 'Distracted' | 'used_panic';
     notes: string;
   }): Promise<UrgeLog | null> {
     if (!user?.id) return null;
@@ -99,7 +110,20 @@ export function useUrges() {
         setState((prev) => ({
           ...prev,
           urges: [newUrge, ...prev.urges],
+          todaysUrges: [newUrge, ...prev.todaysUrges],
         }));
+
+        track('urge_logged', {
+          intensity: urge.intensity,
+          trigger_type: urge.trigger_type,
+          outcome: urge.outcome,
+        });
+
+        try {
+          await checkAndUnlockMilestones(user.id);
+        } catch (error) {
+          console.error('Error checking milestones:', error);
+        }
 
         await refresh();
       }

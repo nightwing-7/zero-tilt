@@ -8,6 +8,7 @@ import {
   ViewStyle,
   TextStyle,
   Alert,
+  ScrollView,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import Animated, {
@@ -15,11 +16,9 @@ import Animated, {
   useSharedValue,
   withTiming,
   Easing,
-  loop,
 } from 'react-native-reanimated';
 import { useAuth } from '../../hooks/useAuth';
-import { useAnalytics } from '../../hooks/useAnalytics';
-import { logBreathingSession } from '../../services/breathing';
+import { usePanic } from '../../hooks/usePanic';
 import { Button } from '../../components/ui/Button';
 import { colors, spacing, typography } from '../../constants/theme';
 import { BREATHING_PATTERN } from '../../constants/config';
@@ -103,44 +102,82 @@ const styles = StyleSheet.create({
   startButton: {
     width: '100%',
   },
+  calmSlider: {
+    backgroundColor: colors.dark.secondary,
+    borderColor: colors.dark.border,
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: spacing[4],
+    paddingVertical: spacing[3],
+    marginBottom: spacing[3],
+  } as ViewStyle,
+  calmLabel: {
+    fontSize: typography.sizes.sm,
+    fontWeight: '600',
+    color: colors.dark.text.secondary,
+    marginBottom: spacing[2],
+    textTransform: 'uppercase',
+  } as TextStyle,
+  calmValue: {
+    fontSize: typography.sizes.lg,
+    fontWeight: '700',
+    color: colors.accent.teal,
+    marginBottom: spacing[2],
+  } as TextStyle,
+  calmButton: {
+    paddingVertical: spacing[2],
+    paddingHorizontal: spacing[3],
+    backgroundColor: colors.accent.teal,
+    borderRadius: 8,
+    marginRight: spacing[2],
+  } as ViewStyle,
+  calmButtonActive: {
+    backgroundColor: colors.dark.border,
+  } as ViewStyle,
+  calmButtonText: {
+    fontSize: typography.sizes.base,
+    fontWeight: '600',
+    color: colors.dark.bg.primary,
+  } as TextStyle,
 });
-
-type BreathingPhase = 'inhale' | 'hold' | 'exhale' | 'rest';
 
 export default function PanicScreen() {
   const router = useRouter();
-  const { user } = useAuth();
-  const { track } = useAnalytics();
+  const {
+    isBreathing,
+    currentPhase,
+    cycleCount,
+    totalCycles,
+    secondsRemaining,
+    calmBefore,
+    calmAfter,
+    startBreathing,
+    stopBreathing,
+    completeBreathing,
+    setCalmAfter,
+    logUrge,
+  } = usePanic();
 
-  const [isRunning, setIsRunning] = useState(false);
-  const [phase, setPhase] = useState<BreathingPhase>('inhale');
-  const [seconds, setSeconds] = useState(BREATHING_PATTERN.inhale);
-  const [cycles, setCycles] = useState(0);
-  const [calmBefore, setCalmBefore] = useState(5);
-  const [totalDuration, setTotalDuration] = useState(0);
+  const [showCalmBeforeInput, setShowCalmBeforeInput] = useState(false);
+  const [selectedCalmBefore, setSelectedCalmBefore] = useState(5);
+  const [showCalmAfterInput, setShowCalmAfterInput] = useState(false);
+  const [selectedCalmAfter, setSelectedCalmAfter] = useState(5);
 
   const scale = useSharedValue(0.8);
 
   useEffect(() => {
-    if (!isRunning) {
+    if (!isBreathing) {
       scale.value = 0.8;
       return;
     }
 
-    const phaseMap = {
-      inhale: { duration: BREATHING_PATTERN.inhale, nextPhase: 'hold' as BreathingPhase },
-      hold: { duration: BREATHING_PATTERN.hold, nextPhase: 'exhale' as BreathingPhase },
-      exhale: { duration: BREATHING_PATTERN.exhale, nextPhase: 'rest' as BreathingPhase },
-      rest: { duration: 1, nextPhase: 'inhale' as BreathingPhase },
-    };
-
     const animateScale = () => {
-      if (phase === 'inhale') {
+      if (currentPhase === 'inhale') {
         scale.value = withTiming(1.2, {
           duration: (BREATHING_PATTERN.inhale - 1) * 1000,
           easing: Easing.inOut(Easing.ease),
         });
-      } else if (phase === 'exhale') {
+      } else if (currentPhase === 'exhale') {
         scale.value = withTiming(0.8, {
           duration: (BREATHING_PATTERN.exhale - 1) * 1000,
           easing: Easing.inOut(Easing.ease),
@@ -149,90 +186,41 @@ export default function PanicScreen() {
     };
 
     animateScale();
+  }, [isBreathing, currentPhase]);
 
-    const phaseConfig = phaseMap[phase];
-    const timer = setTimeout(() => {
-      if (phase === 'rest') {
-        setCycles((prev) => prev + 1);
-        if (cycles >= 4) {
-          handleComplete();
-          return;
-        }
-      }
-      setPhase(phaseConfig.nextPhase);
-      setSeconds(phaseConfig.nextPhase === 'inhale' ? BREATHING_PATTERN.inhale : phaseMap[phaseConfig.nextPhase].duration);
-    }, phaseConfig.duration * 1000);
-
-    const countdownInterval = setInterval(() => {
-      setSeconds((prev) => Math.max(0, prev - 1));
-      setTotalDuration((prev) => prev + 1);
-    }, 1000);
-
-    return () => {
-      clearTimeout(timer);
-      clearInterval(countdownInterval);
-    };
-  }, [isRunning, phase, cycles]);
-
-  const handleStart = () => {
-    if (!isRunning) {
-      setCalmBefore(5);
-      setCycles(0);
-      setPhase('inhale');
-      setSeconds(BREATHING_PATTERN.inhale);
-      setTotalDuration(0);
-      setIsRunning(true);
-      track('breathing_session_started');
-    }
+  const handleStartBreathing = async () => {
+    await startBreathing(selectedCalmBefore);
+    setShowCalmBeforeInput(false);
   };
 
-  const handleStop = () => {
-    setIsRunning(false);
+  const handleCompleteBreathing = async () => {
+    setCalmAfter(selectedCalmAfter);
+    await completeBreathing();
+    setShowCalmAfterInput(true);
   };
 
-  const handleComplete = async () => {
-    setIsRunning(false);
-
-    if (!user?.id) {
-      Alert.alert('Error', 'User not found');
-      return;
-    }
-
-    try {
-      await logBreathingSession(user.id, {
-        exercise_type: '4-7-8 Breathing',
-        duration_seconds: totalDuration,
-        calm_before: calmBefore,
-        calm_after: 7,
-      });
-
-      track('breathing_session_completed', {
-        duration_seconds: totalDuration,
-        cycles: cycles,
-      });
-
-      Alert.alert(
-        'Well Done!',
-        'You completed a breathing session. Did it help?',
-        [
-          {
-            text: 'Log Urge',
-            onPress: () => router.push('/urge-log'),
+  const handleAfterBreathing = () => {
+    Alert.alert(
+      'Well Done!',
+      'You completed a breathing session. What would you like to do?',
+      [
+        {
+          text: 'Log Urge',
+          onPress: async () => {
+            await logUrge(5, 'breathing', 'Logged after breathing exercise');
+            router.push('/urge-log');
           },
-          {
-            text: 'Back to Dashboard',
-            onPress: () => router.push('/(tabs)/dashboard'),
-          },
-        ]
-      );
-    } catch (error) {
-      console.error('Error logging breathing session:', error);
-      Alert.alert('Error', 'Failed to save breathing session');
-    }
+        },
+        {
+          text: 'Back to Dashboard',
+          onPress: () => router.push('/(tabs)/dashboard'),
+        },
+      ]
+    );
   };
 
   const getPhaseLabel = () => {
-    switch (phase) {
+    switch (currentPhase) {
       case 'inhale':
         return 'Breathe In';
       case 'hold':
@@ -258,8 +246,8 @@ export default function PanicScreen() {
         <Text style={styles.headerTitle}>Breathing Exercise</Text>
       </View>
 
-      <View style={styles.content}>
-        {!isRunning ? (
+      <ScrollView contentContainerStyle={styles.content}>
+        {!isBreathing && !showCalmAfterInput ? (
           <>
             <View style={styles.instructionsBox}>
               <Text style={styles.instructionsTitle}>4-7-8 Breathing</Text>
@@ -272,38 +260,89 @@ export default function PanicScreen() {
                 4. Repeat 5 times
               </Text>
             </View>
+
+            <View style={styles.calmSlider}>
+              <Text style={styles.calmLabel}>How calm are you now? (1-10)</Text>
+              <Text style={styles.calmValue}>{selectedCalmBefore}</Text>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing[2] }}>
+                {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((num) => (
+                  <TouchableOpacity
+                    key={num}
+                    style={[
+                      styles.calmButton,
+                      selectedCalmBefore === num && styles.calmButtonActive,
+                    ]}
+                    onPress={() => setSelectedCalmBefore(num)}
+                  >
+                    <Text style={styles.calmButtonText}>{num}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
           </>
-        ) : (
+        ) : isBreathing ? (
           <View style={styles.breathingContainer}>
             <Animated.View style={[styles.circle, animatedStyle]}>
-              <Text style={styles.timerText}>{seconds}</Text>
+              <Text style={styles.timerText}>{secondsRemaining}</Text>
             </Animated.View>
 
             <Text style={styles.phaseText}>{getPhaseLabel()}</Text>
-            <Text style={styles.cycleText}>Cycle {cycles + 1} of 5</Text>
+            <Text style={styles.cycleText}>Cycle {cycleCount + 1} of {totalCycles}</Text>
           </View>
-        )}
-      </View>
+        ) : showCalmAfterInput ? (
+          <View style={styles.calmSlider}>
+            <Text style={styles.calmLabel}>How calm are you now? (1-10)</Text>
+            <Text style={styles.calmValue}>{selectedCalmAfter}</Text>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing[2] }}>
+              {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((num) => (
+                <TouchableOpacity
+                  key={num}
+                  style={[
+                    styles.calmButton,
+                    selectedCalmAfter === num && styles.calmButtonActive,
+                  ]}
+                  onPress={() => setSelectedCalmAfter(num)}
+                >
+                  <Text style={styles.calmButtonText}>{num}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+        ) : null}
+      </ScrollView>
 
       <View style={styles.buttons}>
-        {!isRunning ? (
+        {!isBreathing && !showCalmAfterInput ? (
           <Button
             title="Start Exercise"
-            onPress={handleStart}
+            onPress={handleStartBreathing}
             size="lg"
             style={styles.startButton}
           />
-        ) : (
+        ) : isBreathing ? (
           <>
             <Button
+              title="Complete"
+              onPress={handleCompleteBreathing}
+              size="lg"
+              style={styles.startButton}
+            />
+            <Button
               title="Stop"
-              onPress={handleStop}
-              variant="danger"
+              onPress={stopBreathing}
+              variant="secondary"
               size="lg"
               style={styles.startButton}
             />
           </>
-        )}
+        ) : showCalmAfterInput ? (
+          <Button
+            title="Finish"
+            onPress={handleAfterBreathing}
+            size="lg"
+            style={styles.startButton}
+          />
+        ) : null}
       </View>
     </SafeAreaView>
   );

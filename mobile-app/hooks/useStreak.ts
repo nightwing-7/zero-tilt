@@ -1,19 +1,36 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from './useAuth';
-import { getCurrentStreak, getBestStreak, resetStreak as resetStreakService, getStreakHistory } from '../services/streaks';
+import { useAnalytics } from './useAnalytics';
+import {
+  getCurrentStreak,
+  getBestStreak,
+  checkInToday,
+  resetStreakWithRelapse,
+  getStreakHistory,
+} from '../services/streakEngine';
+import { getRelapseHistory } from '../services/relapseService';
+import { checkAndUnlockMilestones } from '../services/milestoneEngine';
 
 export interface StreakState {
   currentStreak: number;
   bestStreak: number;
+  lastCheckIn: string | null;
+  isCheckedInToday: boolean;
+  relapseHistory: any[];
   loading: boolean;
   error: string | null;
 }
 
 export function useStreak() {
   const { user } = useAuth();
+  const { track } = useAnalytics();
+
   const [state, setState] = useState<StreakState>({
     currentStreak: 0,
     bestStreak: 0,
+    lastCheckIn: null,
+    isCheckedInToday: false,
+    relapseHistory: [],
     loading: true,
     error: null,
   });
@@ -23,6 +40,9 @@ export function useStreak() {
       setState({
         currentStreak: 0,
         bestStreak: 0,
+        lastCheckIn: null,
+        isCheckedInToday: false,
+        relapseHistory: [],
         loading: false,
         error: null,
       });
@@ -33,10 +53,18 @@ export function useStreak() {
       try {
         const streakData = await getCurrentStreak(user.id);
         const bestStreakData = await getBestStreak(user.id);
+        const relapseData = await getRelapseHistory(user.id, 10);
+
+        const lastCheckinDate = streakData?.last_checkin ? streakData.last_checkin.split('T')[0] : null;
+        const today = new Date().toISOString().split('T')[0];
+        const isCheckedIn = lastCheckinDate === today;
 
         setState({
           currentStreak: streakData?.current_days || 0,
           bestStreak: bestStreakData || 0,
+          lastCheckIn: lastCheckinDate,
+          isCheckedInToday: isCheckedIn,
+          relapseHistory: relapseData,
           loading: false,
           error: null,
         });
@@ -61,10 +89,18 @@ export function useStreak() {
 
       const streakData = await getCurrentStreak(user.id);
       const bestStreakData = await getBestStreak(user.id);
+      const relapseData = await getRelapseHistory(user.id, 10);
+
+      const lastCheckinDate = streakData?.last_checkin ? streakData.last_checkin.split('T')[0] : null;
+      const today = new Date().toISOString().split('T')[0];
+      const isCheckedIn = lastCheckinDate === today;
 
       setState({
         currentStreak: streakData?.current_days || 0,
         bestStreak: bestStreakData || 0,
+        lastCheckIn: lastCheckinDate,
+        isCheckedInToday: isCheckedIn,
+        relapseHistory: relapseData,
         loading: false,
         error: null,
       });
@@ -78,23 +114,74 @@ export function useStreak() {
     }
   }
 
-  async function resetCurrentStreak(): Promise<boolean> {
+  async function checkIn(): Promise<boolean> {
+    if (!user?.id || state.isCheckedInToday) {
+      return false;
+    }
+
+    try {
+      const result = await checkInToday(user.id);
+
+      setState((prev) => ({
+        ...prev,
+        currentStreak: result.current_days,
+        bestStreak: result.best_streak,
+        isCheckedInToday: true,
+        lastCheckIn: new Date().toISOString().split('T')[0],
+      }));
+
+      track('streak_updated', {
+        current_days: result.current_days,
+        best_streak: result.best_streak,
+      });
+
+      try {
+        await checkAndUnlockMilestones(user.id);
+      } catch (error) {
+        console.error('Error checking milestones:', error);
+      }
+
+      return true;
+    } catch (error) {
+      console.error('Error checking in:', error);
+      return false;
+    }
+  }
+
+  async function logRelapse(
+    triggerCategory: string = 'unknown',
+    emotionalState: string = 'frustrated',
+    notes: string = '',
+    severity: 'mild' | 'moderate' | 'severe' = 'moderate'
+  ): Promise<boolean> {
     if (!user?.id) return false;
 
     try {
-      const result = await resetStreakService(user.id);
+      const result = await resetStreakWithRelapse(
+        user.id,
+        triggerCategory,
+        emotionalState,
+        notes,
+        severity
+      );
 
-      if (result) {
-        setState((prev) => ({
-          ...prev,
-          currentStreak: 0,
-        }));
-        return true;
-      }
+      setState((prev) => ({
+        ...prev,
+        currentStreak: 0,
+      }));
 
-      return false;
+      track('relapse_logged', {
+        trigger_category: triggerCategory,
+        emotional_state: emotionalState,
+        severity,
+        previous_streak: result.previous_streak,
+      });
+
+      await refresh();
+
+      return true;
     } catch (error) {
-      console.error('Error resetting streak:', error);
+      console.error('Error logging relapse:', error);
       return false;
     }
   }
@@ -102,6 +189,7 @@ export function useStreak() {
   return {
     ...state,
     refresh,
-    resetStreak: resetCurrentStreak,
+    checkIn,
+    logRelapse,
   };
 }

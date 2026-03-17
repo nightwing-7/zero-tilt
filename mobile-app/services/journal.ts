@@ -5,7 +5,7 @@ export interface JournalEntry {
   user_id: string;
   title: string;
   content: string;
-  mood: 'terrible' | 'poor' | 'neutral' | 'good' | 'excellent';
+  mood: 'great' | 'good' | 'neutral' | 'bad' | 'terrible' | 'poor' | 'excellent';
   mood_score: number;
   tags: string[];
   word_count: number;

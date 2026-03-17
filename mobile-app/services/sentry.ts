@@ -59,12 +59,9 @@ export function addBreadcrumb(
   category?: string,
   level?: Sentry.SeverityLevel
 ): void {
-  Sentry.captureMessage(message, {
+  Sentry.addBreadcrumb({
+    message,
+    category: category || 'default',
     level: level || 'info',
-    breadcrumb: {
-      message,
-      category: category || 'default',
-      level: level || 'info',
-    },
   });
 }

@@ -9,15 +9,18 @@ import {
   ViewStyle,
   TextStyle,
   RefreshControl,
+  Modal,
+  Alert,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
 import { useAuth } from '../../hooks/useAuth';
 import { useStreak } from '../../hooks/useStreak';
 import { useUrges } from '../../hooks/useUrges';
+import { useMilestones } from '../../hooks/useMilestones';
+import { usePanic } from '../../hooks/usePanic';
+import { useDailyPledge } from '../../hooks/useDailyPledge';
 import { useAnalytics } from '../../hooks/useAnalytics';
-import { getTodaysPledge } from '../../services/pledges';
-import { getTodaysUrges } from '../../services/urges';
 import { StreakTracker } from '../../components/StreakTracker';
 import { JournalCard } from '../../components/JournalCard';
 import { Card } from '../../components/ui/Card';
@@ -122,17 +125,55 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#fff',
   } as TextStyle,
+  milestoneModal: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  } as ViewStyle,
+  milestoneCard: {
+    backgroundColor: colors.dark.bg.primary,
+    borderRadius: 16,
+    padding: spacing[6],
+    width: '80%',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: colors.accent.teal,
+  } as ViewStyle,
+  milestoneIcon: {
+    fontSize: 80,
+    marginBottom: spacing[4],
+  } as TextStyle,
+  milestoneName: {
+    fontSize: typography.sizes.xl,
+    fontWeight: '700',
+    color: colors.dark.text.primary,
+    marginBottom: spacing[2],
+    textAlign: 'center',
+  } as TextStyle,
+  milestoneDescription: {
+    fontSize: typography.sizes.base,
+    color: colors.dark.text.secondary,
+    marginBottom: spacing[4],
+    textAlign: 'center',
+  } as TextStyle,
+  milestonePoints: {
+    fontSize: typography.sizes.lg,
+    fontWeight: '600',
+    color: colors.accent.teal,
+    marginBottom: spacing[4],
+  } as TextStyle,
 });
 
 export default function DashboardScreen() {
   const router = useRouter();
   const { user } = useAuth();
-  const { currentStreak, bestStreak, refresh: refreshStreak } = useStreak();
-  const { urges: allUrges, refresh: refreshUrges } = useUrges();
+  const { currentStreak, bestStreak, refresh: refreshStreak, isCheckedInToday, checkIn } = useStreak();
+  const { todaysUrges, refresh: refreshUrges } = useUrges();
+  const { newlyUnlocked, clearNewlyUnlocked, checkMilestones } = useMilestones();
   const { track } = useAnalytics();
+  const { hasPledged } = useDailyPledge();
 
-  const [pledgedToday, setPledgedToday] = React.useState(false);
-  const [todaysUrges, setTodaysUrges] = React.useState<any[]>([]);
   const [refreshing, setRefreshing] = React.useState(false);
 
   useFocusEffect(
@@ -143,14 +184,24 @@ export default function DashboardScreen() {
   );
 
   const loadDashboardData = async () => {
-    if (!user?.id) return;
-
     try {
-      const pledge = await getTodaysPledge(user.id);
-      setPledgedToday(!!pledge);
+      await Promise.all([refreshStreak(), refreshUrges()]);
 
-      const urges = await getTodaysUrges(user.id);
-      setTodaysUrges(urges);
+      if (hasPledged && !isCheckedInToday && user?.id) {
+        try {
+          await checkIn();
+        } catch (error) {
+          console.error('Error checking in:', error);
+        }
+      }
+
+      if (user?.id) {
+        try {
+          await checkMilestones();
+        } catch (error) {
+          console.error('Error checking milestones:', error);
+        }
+      }
     } catch (error) {
       console.error('Error loading dashboard data:', error);
     }
@@ -159,14 +210,13 @@ export default function DashboardScreen() {
   const handleRefresh = async () => {
     setRefreshing(true);
     try {
-      await Promise.all([refreshStreak(), refreshUrges(), loadDashboardData()]);
+      await loadDashboardData();
     } finally {
       setRefreshing(false);
     }
   };
 
   const handlePanic = () => {
-    track('panic_button_pressed');
     router.push('/(tabs)/panic');
   };
 
@@ -186,6 +236,10 @@ export default function DashboardScreen() {
     router.push('/(tabs)/panic');
   };
 
+  const handleCloseMilestoneModal = () => {
+    clearNewlyUnlocked();
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView
@@ -203,16 +257,16 @@ export default function DashboardScreen() {
         <Card style={styles.pledgeCard}>
           <View style={styles.pledgeStatus}>
             <Text style={styles.pledgeStatusText}>Daily Pledge</Text>
-            {pledgedToday && (
+            {hasPledged && (
               <View style={styles.pledgeBadge}>
                 <Text style={styles.pledgeBadgeText}>SIGNED</Text>
               </View>
             )}
           </View>
           <Button
-            title={pledgedToday ? 'View Pledge' : 'Sign Pledge'}
+            title={hasPledged ? 'View Pledge' : 'Sign Pledge'}
             onPress={handlePledge}
-            variant={pledgedToday ? 'secondary' : 'primary'}
+            variant={hasPledged ? 'secondary' : 'primary'}
           />
         </Card>
 
@@ -240,7 +294,7 @@ export default function DashboardScreen() {
           />
         </View>
 
-        {todaysUrges.length > 0 && (
+        {todaysUrges && todaysUrges.length > 0 && (
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Today's Urges</Text>
             <View style={styles.urgeyList}>
@@ -260,6 +314,30 @@ export default function DashboardScreen() {
           <Text style={styles.panicText}>🚨 PANIC BUTTON</Text>
         </TouchableOpacity>
       </ScrollView>
+
+      {newlyUnlocked && newlyUnlocked.length > 0 && (
+        <Modal
+          visible={newlyUnlocked.length > 0}
+          transparent={true}
+          animationType="fade"
+          onRequestClose={handleCloseMilestoneModal}
+        >
+          <View style={styles.milestoneModal}>
+            <View style={styles.milestoneCard}>
+              <Text style={styles.milestoneIcon}>{newlyUnlocked[0].icon || '🏆'}</Text>
+              <Text style={styles.milestoneName}>{newlyUnlocked[0].name}</Text>
+              <Text style={styles.milestoneDescription}>{newlyUnlocked[0].description}</Text>
+              <Text style={styles.milestonePoints}>+{newlyUnlocked[0].points} Points</Text>
+              <Button
+                title="Awesome!"
+                onPress={handleCloseMilestoneModal}
+                size="md"
+                style={{ width: '100%' }}
+              />
+            </View>
+          </View>
+        </Modal>
+      )}
     </SafeAreaView>
   );
 }

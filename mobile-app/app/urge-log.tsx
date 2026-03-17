@@ -13,11 +13,10 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
-import Slider from '@react-native-community/slider';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../hooks/useAuth';
 import { useAnalytics } from '../hooks/useAnalytics';
-import { logUrge } from '../services/urges';
+import { useUrges } from '../hooks/useUrges';
 import { TILT_TRIGGERS, COPING_STRATEGIES, URGE_OUTCOMES } from '../constants/config';
 import { colors, spacing, typography, borderRadius } from '../constants/theme';
 import { Button } from '../components/ui/Button';
@@ -69,10 +68,18 @@ const styles = StyleSheet.create({
     fontSize: typography.sizes.base,
     color: colors.dark.text.secondary,
   } as TextStyle,
-  slider: {
-    width: '100%',
-    height: 40,
-  },
+  intensityInput: {
+    backgroundColor: colors.dark.secondary,
+    borderColor: colors.dark.border,
+    borderWidth: 1,
+    borderRadius: borderRadius.md,
+    paddingHorizontal: spacing[3],
+    paddingVertical: spacing[2],
+    color: colors.dark.text.primary,
+    fontSize: typography.sizes.base,
+    textAlign: 'center',
+    width: 60,
+  } as TextStyle,
   triggerGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -174,8 +181,9 @@ export default function UrgeLogScreen() {
   const router = useRouter();
   const { user } = useAuth();
   const { track } = useAnalytics();
+  const { logUrge } = useUrges();
 
-  const [intensity, setIntensity] = useState(5);
+  const [intensity, setIntensity] = useState('5');
   const [selectedTrigger, setSelectedTrigger] = useState<string>('');
   const [triggerDetails, setTriggerDetails] = useState('');
   const [selectedCopingStrategies, setSelectedCopingStrategies] = useState<string[]>([]);
@@ -195,27 +203,18 @@ export default function UrgeLogScreen() {
       return;
     }
 
-    if (!user?.id) {
-      Alert.alert('Error', 'User not found');
-      return;
-    }
+    const intensityNum = Math.max(1, Math.min(10, parseInt(intensity, 10) || 5));
 
     setLoading(true);
 
     try {
-      await logUrge(user.id, {
-        intensity: Math.round(intensity),
+      await logUrge({
+        intensity: intensityNum,
         trigger_type: selectedTrigger,
         trigger_details: triggerDetails,
         coping_strategies: selectedCopingStrategies,
-        outcome: selectedOutcome as any,
+        outcome: selectedOutcome as 'Resisted' | 'Gave in' | 'Distracted' | 'used_panic',
         notes,
-      });
-
-      track('urge_logged', {
-        intensity: Math.round(intensity),
-        trigger_type: selectedTrigger,
-        outcome: selectedOutcome,
       });
 
       Alert.alert('Success', 'Urge logged successfully!', [
@@ -247,23 +246,29 @@ export default function UrgeLogScreen() {
             <Text style={styles.sectionLabel}>Intensity (1-10)</Text>
             <View style={styles.intensityDisplay}>
               <Text style={styles.intensityValue}>
-                {formatIntensity(Math.round(intensity))}
+                {formatIntensity(parseInt(intensity, 10) || 5)}
               </Text>
               <View>
-                <Text style={styles.intensityValue}>{Math.round(intensity)}</Text>
-                <Text style={styles.intensityLabel}>{getIntensityLabel(Math.round(intensity))}</Text>
+                <TextInput
+                  style={styles.intensityInput}
+                  value={intensity}
+                  onChangeText={(val) => {
+                    const num = parseInt(val, 10);
+                    if (!isNaN(num)) {
+                      setIntensity(String(Math.max(1, Math.min(10, num))));
+                    } else if (val === '') {
+                      setIntensity('');
+                    }
+                  }}
+                  keyboardType="number-pad"
+                  maxLength={2}
+                  editable={!loading}
+                />
+                <Text style={styles.intensityLabel}>
+                  {getIntensityLabel(parseInt(intensity, 10) || 5)}
+                </Text>
               </View>
             </View>
-            <Slider
-              style={styles.slider}
-              minimumValue={1}
-              maximumValue={10}
-              step={1}
-              value={intensity}
-              onValueChange={setIntensity}
-              minimumTrackTintColor={colors.accent.teal}
-              maximumTrackTintColor={colors.dark.tertiary}
-            />
           </View>
 
           <View style={styles.section}>
