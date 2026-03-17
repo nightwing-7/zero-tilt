@@ -5,7 +5,7 @@ export interface JournalEntry {
   user_id: string;
   title: string;
   content: string;
-  mood: 'great' | 'good' | 'neutral' | 'bad' | 'terrible' | 'poor' | 'excellent';
+  mood: 'great' | 'good' | 'neutral' | 'bad' | 'terrible';
   mood_score: number;
   tags: string[];
   word_count: number;
@@ -66,7 +66,7 @@ export async function createJournalEntry(
   entry: {
     title: string;
     content: string;
-    mood: 'terrible' | 'poor' | 'neutral' | 'good' | 'excellent';
+    mood: 'terrible' | 'bad' | 'neutral' | 'good' | 'great';
     mood_score: number;
     tags: string[];
   }

@@ -34,21 +34,25 @@ export const COPING_STRATEGIES = [
 
 export const MOOD_EMOJIS = {
   terrible: '😢',
-  poor: '😟',
+  bad: '😟',
   neutral: '😐',
   good: '🙂',
-  excellent: '🤩',
+  great: '🤩',
 };
 
 export const MOOD_VALUES = {
   terrible: 1,
-  poor: 2,
+  bad: 2,
   neutral: 3,
   good: 4,
-  excellent: 5,
+  great: 5,
 };
 
-export const URGE_OUTCOMES = ['Resisted', 'Gave in', 'Distracted'];
+export const URGE_OUTCOMES = [
+  { label: 'Resisted', value: 'resisted' },
+  { label: 'Gave In', value: 'gave_in' },
+  { label: 'Distracted', value: 'distracted' },
+];
 
 export const MILESTONE_TIERS = {
   bronze: { name: 'Bronze', color: '#b87d3b', minPoints: 0 },

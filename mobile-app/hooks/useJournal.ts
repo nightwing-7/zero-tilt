@@ -56,8 +56,8 @@ export function useJournal() {
       try {
         const [entries, draftExists, draft] = await Promise.all([
           getJournalEntries(user.id, 50, 0),
-          hasDraft(),
-          getDraft(),
+          hasDraft(user.id),
+          getDraft(user.id),
         ]);
 
         setState({
@@ -129,8 +129,9 @@ export function useJournal() {
     mood?: string,
     tags?: string[]
   ): Promise<void> {
+    if (!user?.id) return;
     try {
-      await saveDraft(entryId, title, content, mood, tags);
+      await saveDraft(user.id, entryId, title, content, mood, tags);
       setState((prev) => ({
         ...prev,
         hasPendingDraft: true,
@@ -142,8 +143,9 @@ export function useJournal() {
   }
 
   async function loadDraft(entryId?: string): Promise<JournalDraft | null> {
+    if (!user?.id) return null;
     try {
-      const draft = await getDraft(entryId);
+      const draft = await getDraft(user.id, entryId);
       if (draft) {
         setState((prev) => ({
           ...prev,
@@ -159,8 +161,9 @@ export function useJournal() {
   }
 
   async function clearDraftLocal(entryId?: string): Promise<void> {
+    if (!user?.id) return;
     try {
-      await clearDraft(entryId);
+      await clearDraft(user.id, entryId);
       setState((prev) => ({
         ...prev,
         draft: null,
@@ -174,7 +177,7 @@ export function useJournal() {
   async function create(entry: {
     title: string;
     content: string;
-    mood: 'terrible' | 'poor' | 'neutral' | 'good' | 'excellent';
+    mood: 'terrible' | 'bad' | 'neutral' | 'good' | 'great';
     mood_score: number;
     tags: string[];
   }): Promise<JournalEntry | null> {

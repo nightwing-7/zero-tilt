@@ -33,7 +33,7 @@ async function getUserStats(userId: string): Promise<{
     ]);
 
     const urgesResisted = urgesData.filter(
-      u => u.outcome && (u.outcome === 'Resisted' || u.outcome === 'resisted')
+      u => u.outcome === 'resisted'
     ).length;
 
     return {

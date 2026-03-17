@@ -213,7 +213,7 @@ export default function UrgeLogScreen() {
         trigger_type: selectedTrigger,
         trigger_details: triggerDetails,
         coping_strategies: selectedCopingStrategies,
-        outcome: selectedOutcome as 'Resisted' | 'Gave in' | 'Distracted' | 'used_panic',
+        outcome: selectedOutcome as 'resisted' | 'gave_in' | 'distracted' | 'used_panic',
         notes,
       });
 
@@ -339,20 +339,20 @@ export default function UrgeLogScreen() {
             <View style={styles.outcomeGrid}>
               {URGE_OUTCOMES.map((outcome) => (
                 <TouchableOpacity
-                  key={outcome}
+                  key={outcome.value}
                   style={[
                     styles.outcomeButton,
-                    selectedOutcome === outcome && styles.outcomeButtonActive,
+                    selectedOutcome === outcome.value && styles.outcomeButtonActive,
                   ]}
-                  onPress={() => setSelectedOutcome(outcome)}
+                  onPress={() => setSelectedOutcome(outcome.value)}
                 >
                   <Text
                     style={[
                       styles.outcomeText,
-                      selectedOutcome === outcome && styles.outcomeTextActive,
+                      selectedOutcome === outcome.value && styles.outcomeTextActive,
                     ]}
                   >
-                    {outcome}
+                    {outcome.label}
                   </Text>
                 </TouchableOpacity>
               ))}

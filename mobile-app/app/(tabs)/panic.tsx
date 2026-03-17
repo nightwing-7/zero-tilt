@@ -194,8 +194,7 @@ export default function PanicScreen() {
   };
 
   const handleCompleteBreathing = async () => {
-    setCalmAfter(selectedCalmAfter);
-    await completeBreathing();
+    await completeBreathing(selectedCalmAfter);
     setShowCalmAfterInput(true);
   };
 

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from './useAuth';
 import { useAnalytics } from './useAnalytics';
-import { startPanicSession, completePanicSession, logPanicUrge } from '../services/panicService';
+import { startPanicSession, completePanicSession, abandonPanicSession, logPanicUrge } from '../services/panicService';
 import { BREATHING_PATTERN } from '../constants/config';
 
 type BreathingPhase = 'inhale' | 'hold' | 'exhale' | 'rest';
@@ -135,7 +135,15 @@ export function usePanic() {
     }
   }
 
-  function stopBreathing(): void {
+  async function stopBreathing(): Promise<void> {
+    if (state.sessionId) {
+      try {
+        await abandonPanicSession(state.sessionId);
+      } catch (error) {
+        console.error('Error abandoning session:', error);
+      }
+    }
+
     setState(prev => ({
       ...prev,
       isBreathing: false,
@@ -143,10 +151,13 @@ export function usePanic() {
     }));
   }
 
-  async function completeBreathing(): Promise<void> {
+  async function completeBreathing(finalCalmAfter?: number): Promise<void> {
+    const calmAfterValue = finalCalmAfter ?? state.calmAfter ?? 5;
+
     setState(prev => ({
       ...prev,
       isBreathing: false,
+      calmAfter: calmAfterValue,
     }));
 
     if (!user?.id || !state.sessionId) {
@@ -158,14 +169,14 @@ export function usePanic() {
         state.sessionId,
         state.totalDuration,
         state.calmBefore || 5,
-        state.calmAfter || 5
+        calmAfterValue
       );
 
       track('breathing_completed', {
         duration_seconds: state.totalDuration,
         cycles: state.cycleCount + 1,
         calm_before: state.calmBefore,
-        calm_after: state.calmAfter,
+        calm_after: calmAfterValue,
       });
     } catch (error) {
       console.error('Error completing breathing:', error);

@@ -7,6 +7,8 @@ import {
   checkInToday,
   resetStreakWithRelapse,
   getStreakHistory,
+  getDateInTimezone,
+  dateToIsoDate,
 } from '../services/streakEngine';
 import { getRelapseHistory } from '../services/relapseService';
 import { checkAndUnlockMilestones } from '../services/milestoneEngine';
@@ -56,7 +58,8 @@ export function useStreak() {
         const relapseData = await getRelapseHistory(user.id, 10);
 
         const lastCheckinDate = streakData?.last_checkin ? streakData.last_checkin.split('T')[0] : null;
-        const today = new Date().toISOString().split('T')[0];
+        const deviceTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'America/New_York';
+        const today = dateToIsoDate(getDateInTimezone(deviceTimezone));
         const isCheckedIn = lastCheckinDate === today;
 
         setState({
@@ -92,7 +95,8 @@ export function useStreak() {
       const relapseData = await getRelapseHistory(user.id, 10);
 
       const lastCheckinDate = streakData?.last_checkin ? streakData.last_checkin.split('T')[0] : null;
-      const today = new Date().toISOString().split('T')[0];
+      const deviceTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'America/New_York';
+      const today = dateToIsoDate(getDateInTimezone(deviceTimezone));
       const isCheckedIn = lastCheckinDate === today;
 
       setState({

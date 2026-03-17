@@ -98,7 +98,7 @@ export function useUrges() {
     trigger_type: string;
     trigger_details: string;
     coping_strategies: string[];
-    outcome: 'Resisted' | 'Gave in' | 'Distracted' | 'used_panic';
+    outcome: 'resisted' | 'gave_in' | 'distracted' | 'used_panic';
     notes: string;
   }): Promise<UrgeLog | null> {
     if (!user?.id) return null;

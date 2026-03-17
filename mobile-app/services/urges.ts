@@ -7,7 +7,7 @@ export interface UrgeLog {
   trigger_type: string;
   trigger_details: string;
   coping_strategies: string[];
-  outcome: 'Resisted' | 'Gave in' | 'Distracted' | 'resisted' | 'gave_in' | 'distracted' | 'used_panic';
+  outcome: 'resisted' | 'gave_in' | 'distracted' | 'used_panic';
   notes: string;
   created_at: string;
   updated_at: string;
@@ -29,7 +29,7 @@ export async function logUrge(
     trigger_type: string;
     trigger_details: string;
     coping_strategies: string[];
-    outcome: 'Resisted' | 'Gave in' | 'Distracted';
+    outcome: 'resisted' | 'gave_in' | 'distracted' | 'used_panic';
     notes: string;
   }
 ): Promise<UrgeLog | null> {
@@ -129,7 +129,7 @@ export async function getUrgeStats(userId: string): Promise<UrgeStats> {
       };
     }
 
-    const resistedCount = urges.filter((u) => u.outcome === 'Resisted').length;
+    const resistedCount = urges.filter((u) => u.outcome === 'resisted').length;
     const resistRate = (resistedCount / urges.length) * 100;
 
     const averageIntensity =

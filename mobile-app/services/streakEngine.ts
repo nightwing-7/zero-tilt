@@ -15,7 +15,7 @@ export interface CheckInResult {
   message: string;
 }
 
-function getDateInTimezone(timezone: string): Date {
+export function getDateInTimezone(timezone: string): Date {
   const formatter = new Intl.DateTimeFormat('en-US', {
     timeZone: timezone,
     year: 'numeric',
@@ -33,7 +33,7 @@ function getDateInTimezone(timezone: string): Date {
   return localDate;
 }
 
-function dateToIsoDate(date: Date): string {
+export function dateToIsoDate(date: Date): string {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, '0');
   const day = String(date.getDate()).padStart(2, '0');

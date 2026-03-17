@@ -189,7 +189,7 @@ export default function ProgressScreen() {
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Milestones</Text>
-          <Text style={styles.progressValue} style={{ marginBottom: spacing[3] }}>
+          <Text style={[styles.progressValue, { marginBottom: spacing[3] }]}>
             {unlockedCount} of {milestones.length} unlocked
           </Text>
 

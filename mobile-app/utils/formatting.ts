@@ -78,31 +78,34 @@ export function getIntensityLabel(intensity: number): string {
 export function formatMoodLabel(mood: string): string {
   const labels: Record<string, string> = {
     terrible: 'Terrible',
-    poor: 'Poor',
+    bad: 'Bad',
     neutral: 'Neutral',
     good: 'Good',
-    excellent: 'Excellent',
+    great: 'Great',
   };
   return labels[mood] || mood;
 }
 
 export function formatOutcomeLabel(outcome: string): string {
   const labels: Record<string, string> = {
-    'Resisted': '✓ Resisted',
-    'Gave in': '✗ Gave in',
-    'Distracted': '↻ Distracted',
+    'resisted': '✓ Resisted',
+    'gave_in': '✗ Gave In',
+    'distracted': '↻ Distracted',
+    'used_panic': '🫁 Used Panic',
   };
   return labels[outcome] || outcome;
 }
 
 export function getOutcomeColor(outcome: string): string {
   switch (outcome) {
-    case 'Resisted':
+    case 'resisted':
       return '#10b981';
-    case 'Gave in':
+    case 'gave_in':
       return '#ef4444';
-    case 'Distracted':
+    case 'distracted':
       return '#f59e0b';
+    case 'used_panic':
+      return '#6366f1';
     default:
       return '#64748b';
   }

@@ -139,10 +139,7 @@ export default function SettingsScreen() {
   };
 
   const handleEditProfile = () => {
-    router.push({
-      pathname: '/journal-entry',
-      params: { isProfile: 'true' },
-    });
+    router.push('/edit-profile');
   };
 
   return (

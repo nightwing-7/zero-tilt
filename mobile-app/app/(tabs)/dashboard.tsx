@@ -18,7 +18,6 @@ import { useAuth } from '../../hooks/useAuth';
 import { useStreak } from '../../hooks/useStreak';
 import { useUrges } from '../../hooks/useUrges';
 import { useMilestones } from '../../hooks/useMilestones';
-import { usePanic } from '../../hooks/usePanic';
 import { useDailyPledge } from '../../hooks/useDailyPledge';
 import { useAnalytics } from '../../hooks/useAnalytics';
 import { StreakTracker } from '../../components/StreakTracker';
