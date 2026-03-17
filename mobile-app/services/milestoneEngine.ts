@@ -5,6 +5,8 @@ import { getUrgeHistory } from './urges';
 import { getJournalEntries } from './journal';
 import { getBreathingSessions } from './breathing';
 import { getPledgeHistory } from './pledges';
+import { getRelapseHistory } from './relapseService';
+import { getWeeklyGoalProgress } from './goals';
 
 export interface NewMilestoneUnlock {
   id: string;
@@ -15,25 +17,36 @@ export interface NewMilestoneUnlock {
   points: number;
 }
 
-async function getUserStats(userId: string): Promise<{
+interface UserStats {
   streakDays: number;
   journalEntries: number;
   urgesResisted: number;
   totalUrges: number;
   pledgesSigned: number;
   breathingSessions: number;
-}> {
+  goalsCompletedDays: number;
+  totalRelapses: number;
+  highIntensityUrgesResisted: number;
+}
+
+async function getUserStats(userId: string): Promise<UserStats> {
   try {
-    const [streakData, journalData, urgesData, breathingData, pledgesData] = await Promise.all([
+    const [streakData, journalData, urgesData, breathingData, pledgesData, relapseData, goalProgress] = await Promise.all([
       getCurrentStreak(userId),
       getJournalEntries(userId, 1000),
       getUrgeHistory(userId, 1000),
       getBreathingSessions(userId, 1000),
       getPledgeHistory(userId, 1000),
+      getRelapseHistory(userId, 1000),
+      getWeeklyGoalProgress(userId),
     ]);
 
     const urgesResisted = urgesData.filter(
       u => u.outcome === 'resisted'
+    ).length;
+
+    const highIntensityUrgesResisted = urgesData.filter(
+      u => u.outcome === 'resisted' && u.intensity >= 7
     ).length;
 
     return {
@@ -43,6 +56,9 @@ async function getUserStats(userId: string): Promise<{
       totalUrges: urgesData.length,
       pledgesSigned: pledgesData.length,
       breathingSessions: breathingData.filter(b => b.completed).length,
+      goalsCompletedDays: goalProgress.completedDays,
+      totalRelapses: relapseData.length,
+      highIntensityUrgesResisted: highIntensityUrgesResisted,
     };
   } catch (error) {
     console.error('Error fetching user stats:', error);
@@ -53,6 +69,9 @@ async function getUserStats(userId: string): Promise<{
       totalUrges: 0,
       pledgesSigned: 0,
       breathingSessions: 0,
+      goalsCompletedDays: 0,
+      totalRelapses: 0,
+      highIntensityUrgesResisted: 0,
     };
   }
 }
@@ -100,6 +119,22 @@ export async function checkAndUnlockMilestones(userId: string): Promise<NewMiles
             progress = Math.min((stats.pledgesSigned / target) * 100, 100);
             shouldUpdate = true;
             break;
+          case 'goals_completed':
+            progress = Math.min((stats.goalsCompletedDays / target) * 100, 100);
+            shouldUpdate = true;
+            break;
+          case 'relapse_recovery':
+            // Milestone for bouncing back after relapses (requires having relapsed and rebuilt streak)
+            if (stats.totalRelapses > 0 && stats.streakDays > 0) {
+              progress = Math.min((stats.streakDays / target) * 100, 100);
+            }
+            shouldUpdate = true;
+            break;
+          case 'urge_intensity_resisted':
+            // High-intensity urges (7+) that were resisted
+            progress = Math.min((stats.highIntensityUrgesResisted / target) * 100, 100);
+            shouldUpdate = true;
+            break;
           default:
             break;
         }
@@ -130,6 +165,16 @@ export async function checkAndUnlockMilestones(userId: string): Promise<NewMiles
               break;
             case 'Community':
               progress = Math.min((stats.pledgesSigned / numRequirement) * 100, 100);
+              shouldUpdate = true;
+              break;
+            case 'Goals':
+              progress = Math.min((stats.goalsCompletedDays / numRequirement) * 100, 100);
+              shouldUpdate = true;
+              break;
+            case 'Recovery':
+              if (stats.totalRelapses > 0 && stats.streakDays > 0) {
+                progress = Math.min((stats.streakDays / numRequirement) * 100, 100);
+              }
               shouldUpdate = true;
               break;
           }

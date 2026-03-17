@@ -11,12 +11,12 @@ export default function TabsLayout() {
         tabBarActiveTintColor: colors.accent.teal,
         tabBarInactiveTintColor: colors.dark.text.tertiary,
         tabBarStyle: {
-          backgroundColor: colors.dark.secondary,
+          backgroundColor: colors.dark.bg.secondary,
           borderTopColor: colors.dark.border,
           borderTopWidth: 1,
         },
         tabBarLabelStyle: {
-          fontSize: 12,
+          fontSize: 11,
           fontWeight: '600',
         },
       }}
@@ -24,9 +24,9 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="dashboard"
         options={{
-          title: 'Dashboard',
-          tabBarLabel: 'Dashboard',
-          tabBarIcon: ({ color }) => <Text style={{ fontSize: 20, color }}>🏠</Text>,
+          title: 'Home',
+          tabBarLabel: 'Home',
+          tabBarIcon: ({ color }) => <TabIcon emoji="🏠" color={color} />,
         } as BottomTabNavigationOptions}
       />
       <Tabs.Screen
@@ -34,7 +34,7 @@ export default function TabsLayout() {
         options={{
           title: 'Journal',
           tabBarLabel: 'Journal',
-          tabBarIcon: ({ color }) => <Text style={{ fontSize: 20, color }}>📔</Text>,
+          tabBarIcon: ({ color }) => <TabIcon emoji="📔" color={color} />,
         } as BottomTabNavigationOptions}
       />
       <Tabs.Screen
@@ -42,7 +42,15 @@ export default function TabsLayout() {
         options={{
           title: 'Panic',
           tabBarLabel: 'Panic',
-          tabBarIcon: ({ color }) => <Text style={{ fontSize: 20, color }}>🚨</Text>,
+          tabBarIcon: ({ color }) => <TabIcon emoji="🚨" color={color} />,
+        } as BottomTabNavigationOptions}
+      />
+      <Tabs.Screen
+        name="community"
+        options={{
+          title: 'Community',
+          tabBarLabel: 'Community',
+          tabBarIcon: ({ color }) => <TabIcon emoji="👥" color={color} />,
         } as BottomTabNavigationOptions}
       />
       <Tabs.Screen
@@ -50,21 +58,23 @@ export default function TabsLayout() {
         options={{
           title: 'Progress',
           tabBarLabel: 'Progress',
-          tabBarIcon: ({ color }) => <Text style={{ fontSize: 20, color }}>📊</Text>,
+          tabBarIcon: ({ color }) => <TabIcon emoji="📊" color={color} />,
         } as BottomTabNavigationOptions}
       />
       <Tabs.Screen
         name="settings"
         options={{
           title: 'Settings',
-          tabBarLabel: 'Settings',
-          tabBarIcon: ({ color }) => <Text style={{ fontSize: 20, color }}>⚙️</Text>,
+          tabBarLabel: 'More',
+          tabBarIcon: ({ color }) => <TabIcon emoji="⚙️" color={color} />,
         } as BottomTabNavigationOptions}
       />
     </Tabs>
   );
 }
 
-function Text(props: any) {
-  return <>{props.children}</>;
+// Proper Text component for tab icons
+function TabIcon({ emoji, color }: { emoji: string; color: string }) {
+  const { Text } = require('react-native');
+  return <Text style={{ fontSize: 20 }}>{emoji}</Text>;
 }

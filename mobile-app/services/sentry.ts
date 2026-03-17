@@ -11,15 +11,25 @@ export function initializeSentry(): void {
   Sentry.init({
     dsn: SENTRY_DSN,
     enableInExpoDevelopment: true,
-    environment: process.env.NODE_ENV || 'development',
-    tracesSampleRate: 1.0,
+    environment: process.env.EXPO_PUBLIC_ENV || process.env.NODE_ENV || 'development',
+    release: process.env.EXPO_PUBLIC_APP_VERSION || '1.0.0',
+    tracesSampleRate: process.env.NODE_ENV === 'production' ? 0.2 : 1.0,
     debug: process.env.NODE_ENV === 'development',
+    enableAutoSessionTracking: true,
+    sessionTrackingIntervalMillis: 30000,
     integrations: [
       new Sentry.ReactNativeTracing({
         enableNativeFramesTracking: true,
         enableAppStartTracking: true,
       }),
     ],
+    beforeSend(event) {
+      // Scrub sensitive data
+      if (event.user) {
+        delete event.user.email;
+      }
+      return event;
+    },
   });
 }
 

@@ -11,7 +11,11 @@
     "build": "eas build",
     "build:ios": "eas build --platform ios",
     "build:android": "eas build --platform android",
-    "type-check": "tsc --noEmit"
+    "build:preview": "eas build --profile preview",
+    "submit:ios": "eas submit --platform ios",
+    "submit:android": "eas submit --platform android",
+    "type-check": "tsc --noEmit",
+    "lint": "eslint . --ext .ts,.tsx"
   },
   "dependencies": {
     "expo": "^52.0.0",
@@ -21,6 +25,8 @@
     "expo-constants": "^16.0.0",
     "expo-linking": "^6.0.0",
     "expo-status-bar": "^1.12.0",
+    "expo-notifications": "^0.28.0",
+    "expo-device": "^6.0.0",
     "@supabase/supabase-js": "^2.40.0",
     "react": "^18.2.0",
     "react-native": "^0.74.0",

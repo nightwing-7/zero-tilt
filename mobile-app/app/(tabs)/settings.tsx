@@ -175,13 +175,37 @@ export default function SettingsScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Account</Text>
 
-          <TouchableOpacity style={styles.settingItem}>
+          <TouchableOpacity style={styles.settingItem} onPress={() => router.push('/notification-settings')}>
             <Text style={styles.settingLabel}>Notifications</Text>
             <Text style={styles.arrow}>→</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.settingItem}>
+          <TouchableOpacity style={styles.settingItem} onPress={() => router.push('/privacy-settings')}>
             <Text style={styles.settingLabel}>Privacy & Security</Text>
+            <Text style={styles.arrow}>→</Text>
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Features</Text>
+
+          <TouchableOpacity style={styles.settingItem} onPress={() => router.push('/coaching')}>
+            <Text style={styles.settingLabel}>AI Coach (Mika)</Text>
+            <Text style={styles.arrow}>→</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.settingItem} onPress={() => router.push('/friends')}>
+            <Text style={styles.settingLabel}>Friends</Text>
+            <Text style={styles.arrow}>→</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.settingItem} onPress={() => router.push('/clans')}>
+            <Text style={styles.settingLabel}>Clans</Text>
+            <Text style={styles.arrow}>→</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.settingItem} onPress={() => router.push('/analytics-dashboard')}>
+            <Text style={styles.settingLabel}>Advanced Analytics</Text>
             <Text style={styles.arrow}>→</Text>
           </TouchableOpacity>
         </View>
@@ -196,8 +220,8 @@ export default function SettingsScreen() {
             </View>
           </View>
 
-          <TouchableOpacity style={styles.settingItem}>
-            <Text style={styles.settingLabel}>Upgrade</Text>
+          <TouchableOpacity style={styles.settingItem} onPress={() => router.push('/paywall')}>
+            <Text style={styles.settingLabel}>Upgrade to Pro</Text>
             <Text style={styles.arrow}>→</Text>
           </TouchableOpacity>
         </View>
