@@ -1,0 +1,62 @@
+{
+  "expo": {
+    "name": "Zero Tilt",
+    "slug": "zero-tilt-app",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "scheme": "zerotilt",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#111113"
+    },
+    "assetBundlePatterns": ["**/*"],
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "app.blackfyre.tilt",
+      "buildNumber": "1",
+      "infoPlist": {
+        "UIBackgroundModes": ["remote-notification"]
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#111113"
+      },
+      "package": "app.blackfyre.tilt"
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "static",
+      "favicon": "./assets/favicon.png",
+      "name": "Zero Tilt",
+      "shortName": "Zero Tilt",
+      "description": "Master your trading psychology. Track streaks, manage urges, and build discipline.",
+      "backgroundColor": "#111113",
+      "themeColor": "#10b981",
+      "lang": "en"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-font",
+      "expo-secure-store",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/notification-icon.png",
+          "color": "#10b981"
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "YOUR_EAS_PROJECT_ID"
+      },
+      "supabaseUrl": "https://wqgmocwpsrmvmorybkqp.supabase.co",
+      "supabaseAnonKey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndxZ21vY3dwc3Jtdm1vcnlia3FwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM0NjcxMjcsImV4cCI6MjA4OTA0MzEyN30.0aFae17EGvDkpMvBAHfGfNwAxUxX6xYLKJhf8qqL7qU"
+    }
+  }
+}
