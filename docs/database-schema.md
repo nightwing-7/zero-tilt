@@ -1,481 +1,388 @@
 # ZERO TILT — Database Schema
 
 > Supabase / PostgreSQL 15
-> Version 1.0 | March 2026
+> Version 2.0 | March 2026
 
-## 1. Entity Relationship Diagram
+## 1. Overview
+
+The ZERO TILT database consists of **25 tables** organized into 6 domains. The schema is designed for Supabase with PostgreSQL 15, using UUID primary keys, Row-Level Security on every table, and custom ENUM types for type safety.
+
+| Domain | Tables | Purpose |
+|--------|--------|---------|
+| **User** | profiles, subscriptions, notification_preferences, privacy_settings | User identity, settings, billing |
+| **Core Loop** | streaks, relapse_events, daily_pledges, daily_checkins, urge_logs | Daily engagement and streak tracking |
+| **Growth** | goals, goal_checkins, journal_entries, checklist_items, checklist_completions | Self-improvement tracking |
+| **Milestones** | milestones, milestone_unlocks | Achievement and gamification system |
+| **Engagement** | breathing_sessions, game_sessions, app_sessions, coach_conversations, coach_messages | Feature usage tracking |
+| **Community** | posts, comments, post_likes, pods, pod_members, friendships | Social features |
+| **Analytics** | analytics_events | Server-side event logging |
+
+## 2. Entity Relationship Diagram
 
 ```
-┌──────────────┐       ┌──────────────┐       ┌──────────────────┐
-│  auth.users  │       │   profiles   │       │  subscriptions   │
-│──────────────│       │──────────────│       │──────────────────│
-│ id (PK)      │──1:1──│ id (PK/FK)   │──1:1──│ user_id (FK)     │
-│ email        │       │ email        │       │ plan             │
-│ ...          │       │ full_name    │       │ status           │
-└──────────────┘       │ trader_name  │       │ revenue_cat_id   │
-                       │ avatar_url   │       └──────────────────┘
-                       │ tilt_risk    │
-                       │ onboarding   │
-                       └──────┬───────┘
-                              │
-          ┌───────────────────┼───────────────────────┐
-          │                   │                       │
-    ┌─────▼──────┐    ┌──────▼───────┐    ┌──────────▼────────┐
-    │  streaks   │    │journal_entries│    │   urge_logs       │
-    │────────────│    │──────────────│    │───────────────────│
-    │ user_id FK │    │ user_id FK   │    │ user_id FK        │
-    │ start_date │    │ title        │    │ intensity (1-5)   │
-    │ days       │    │ content      │    │ trigger           │
-    │ is_active  │    │ mood         │    │ resisted          │
-    │ end_reason │    │ tags[]       │    │ breathing_done    │
-    └────────────┘    └──────────────┘    └───────────────────┘
-          │
-          │           ┌──────────────┐    ┌───────────────────┐
-          │           │    goals     │    │   daily_pledges   │
-          │           │──────────────│    │───────────────────│
-          │           │ user_id FK   │    │ user_id FK        │
-          │           │ title        │──┐ │ pledge_date       │
-          │           │ is_custom    │  │ │ UNIQUE(user,date) │
-          │           └──────────────┘  │ └───────────────────┘
-          │                             │
-          │           ┌─────────────────▼─┐
-          │           │  goal_checkins    │
-          │           │───────────────────│
-          │           │ goal_id FK        │
-          │           │ user_id FK        │
-          │           │ checked_date      │
-          │           │ UNIQUE(goal,date) │
-          │           └───────────────────┘
-          │
-    ┌─────┴───────────────────────────────────────────┐
-    │                                                 │
-    │     COMMUNITY                                   │
-    │  ┌──────────┐   ┌──────────┐   ┌────────────┐  │
-    │  │  posts   │──<│ comments │   │ post_likes │  │
-    │  │──────────│   │──────────│   │────────────│  │
-    │  │ user_id  │   │ post_id  │   │ post_id    │  │
-    │  │ category │   │ user_id  │   │ user_id    │  │
-    │  │ content  │   │ content  │   │ UNIQUE     │  │
-    │  └──────────┘   └──────────┘   └────────────┘  │
-    │                                                 │
-    │  ┌──────────┐   ┌─────────────┐                 │
-    │  │   pods   │──<│ pod_members │                 │
-    │  │──────────│   │─────────────│                 │
-    │  │ name     │   │ pod_id FK   │                 │
-    │  │ creator  │   │ user_id FK  │                 │
-    │  │ max=8    │   │ role        │                 │
-    │  └──────────┘   └─────────────┘                 │
-    │                                                 │
-    │  ┌──────────────┐                               │
-    │  │ friendships  │                               │
-    │  │──────────────│                               │
-    │  │ requester FK │                               │
-    │  │ addressee FK │                               │
-    │  │ status       │                               │
-    │  └──────────────┘                               │
-    └─────────────────────────────────────────────────┘
+                            ┌──────────────┐
+                            │  auth.users  │
+                            │──────────────│
+                            │ id (PK)      │
+                            │ email        │
+                            └──────┬───────┘
+                                   │ 1:1 (trigger)
+                            ┌──────▼───────┐
+                   ┌────────│   profiles   │────────┐
+                   │        │──────────────│        │
+                   │    ┌───│ id (PK/FK)   │───┐    │
+                   │    │   │ trader_name  │   │    │
+                   │    │   │ tilt_risk    │   │    │
+                   │    │   └──────────────┘   │    │
+                   │    │          │            │    │
+         ┌─────────┤    │    ┌─────┼──────┐    │    ├──────────┐
+         │         │    │    │     │      │    │    │          │
+    ┌────▼───┐ ┌───▼────▼┐ ┌▼─────▼─┐ ┌──▼───▼┐ ┌─▼────────┐│
+    │streaks │ │  goals  │ │journal │ │ urge  │ │daily     ││
+    │────────│ │─────────│ │entries │ │ logs  │ │pledges   ││
+    │start_dt│ │title    │ │────────│ │───────│ │──────────││
+    │is_activ│ │is_custom│ │title   │ │intens │ │pledge_txt││
+    │end_reas│ │         │ │content │ │trigger│ │UNIQUE    ││
+    └───┬────┘ └────┬────┘ │mood    │ │resist │ │(usr,date)││
+        │           │      │is_draft│ │breathe│ └──────────┘│
+        │      ┌────▼────┐ │tags[]  │ └───────┘             │
+        │      │goal     │ └────────┘                       │
+        │      │checkins │                                  │
+        │      │─────────│     ┌────────────┐    ┌──────────▼─┐
+        │      │goal_id  │     │  daily     │    │subscriptions│
+        │      │checked  │     │  checkins  │    │────────────│
+        │      │UNIQUE   │     │────────────│    │plan (enum) │
+        │      └─────────┘     │mood, energy│    │status      │
+        │                      │UNIQUE      │    │revenuecat  │
+        │                      └────────────┘    └────────────┘
+   ┌────▼──────────┐
+   │relapse_events │    ┌──────────────┐    ┌──────────────┐
+   │───────────────│    │  milestones  │    │  milestone   │
+   │streak_id FK   │    │  (reference) │    │  unlocks     │
+   │trigger_cat    │    │──────────────│    │──────────────│
+   │emotional_st   │    │ slug UNIQUE  │───>│ milestone_id │
+   │lesson         │    │ category     │    │ progress     │
+   │severity       │    │ req_type     │    │ is_unlocked  │
+   └───────────────┘    │ req_value    │    │ unlocked_at  │
+                        │ tier (enum)  │    └──────────────┘
+                        └──────────────┘
+
+  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐
+  │  breathing   │  │    game      │  │     app      │
+  │  sessions    │  │  sessions    │  │  sessions    │
+  │──────────────│  │──────────────│  │──────────────│
+  │ duration_sec │  │ game_type    │  │ started_at   │
+  │ cycles       │  │ score        │  │ ended_at     │
+  │ context      │  │ level        │  │ duration     │
+  │ completed    │  │ context      │  │ platform     │
+  └──────────────┘  └──────────────┘  └──────────────┘
+
+  ┌──────────────┐  ┌──────────────┐
+  │    coach     │  │   coach      │
+  │conversations │──│  messages    │
+  │──────────────│  │──────────────│
+  │ title        │  │ role         │
+  │ message_count│  │ content      │
+  │ is_active    │  │ tokens_used  │
+  └──────────────┘  └──────────────┘
+
+  COMMUNITY:
+  ┌──────────┐   ┌──────────┐   ┌────────────┐
+  │  posts   │──<│ comments │   │ post_likes │
+  │──────────│   │──────────│   │────────────│
+  │ category │   │ post_id  │   │ UNIQUE     │
+  │ likes_ct │   │ content  │   │(post,user) │
+  │ pinned   │   └──────────┘   └────────────┘
+  └──────────┘
+  ┌──────────┐   ┌─────────────┐  ┌──────────────┐
+  │   pods   │──<│ pod_members │  │ friendships  │
+  │──────────│   │─────────────│  │──────────────│
+  │ name     │   │ role        │  │ requester FK │
+  │ max=8    │   │ UNIQUE      │  │ addressee FK │
+  └──────────┘   └─────────────┘  │ status       │
+                                  └──────────────┘
 ```
 
-## 2. Table Definitions
+## 3. Custom Types
 
-### 2.1 profiles
+The schema uses PostgreSQL ENUM types for type safety and query performance:
 
-Extends Supabase `auth.users`. Created automatically via trigger on signup.
+| Type | Values | Used In |
+|------|--------|---------|
+| `mood_type` | great, good, neutral, bad, terrible | journal_entries, daily_checkins |
+| `subscription_plan` | free, monthly, yearly, lifetime | subscriptions |
+| `subscription_status` | active, trial, cancelled, expired, billing_issue | subscriptions |
+| `tilt_risk` | low, moderate, high, severe | profiles |
+| `experience_level` | beginner, intermediate, advanced, expert, professional | profiles |
+| `friendship_status` | pending, accepted, blocked | friendships |
+| `milestone_tier` | bronze, silver, gold, platinum, diamond | milestones |
+| `post_category` | general, wins, struggles, strategies, questions | posts |
+
+## 4. Table Reference
+
+### 4.1 profiles
+
+Extends Supabase `auth.users`. Auto-created via trigger on signup. Also auto-creates notification_preferences, privacy_settings, subscriptions, and an initial streak.
 
 | Column | Type | Constraints | Description |
 |--------|------|-------------|-------------|
-| `id` | UUID | PK, FK → auth.users(id) ON DELETE CASCADE | Matches auth user ID |
+| `id` | UUID | PK, FK → auth.users ON DELETE CASCADE | Matches auth user ID |
 | `email` | TEXT | | User email |
 | `full_name` | TEXT | | Display name |
 | `trader_name` | TEXT | | Trading alias |
-| `avatar_url` | TEXT | | Profile photo URL (Supabase Storage) |
+| `avatar_url` | TEXT | | Profile photo URL |
 | `bio` | TEXT | | Short bio |
-| `age` | INTEGER | | User age |
+| `age` | INTEGER | CHECK 13-120 | |
 | `trading_style` | TEXT[] | DEFAULT '{}' | e.g. ['Scalper', 'Day Trader'] |
 | `markets` | TEXT[] | DEFAULT '{}' | e.g. ['Futures', 'Stocks'] |
-| `trading_experience` | TEXT | DEFAULT 'beginner' | beginner, intermediate, advanced, expert, professional |
-| `onboarding_completed` | BOOLEAN | DEFAULT FALSE | Whether onboarding flow is done |
-| `quiz_responses` | JSONB | DEFAULT '{}' | Tilt risk assessment quiz answers |
-| `tilt_risk_level` | TEXT | DEFAULT 'moderate' | Calculated: low, moderate, high, severe |
-| `created_at` | TIMESTAMPTZ | DEFAULT NOW() | |
-| `updated_at` | TIMESTAMPTZ | DEFAULT NOW() | |
+| `trading_experience` | experience_level | DEFAULT 'beginner' | |
+| `onboarding_completed` | BOOLEAN | DEFAULT FALSE | |
+| `onboarding_step` | TEXT | DEFAULT 'about_you' | Current step if incomplete |
+| `quiz_responses` | JSONB | DEFAULT '{}' | Tilt risk assessment answers |
+| `tilt_risk_level` | tilt_risk | DEFAULT 'moderate' | Calculated from quiz |
+| `why_i_trade` | TEXT | | User motivation |
+| `selected_symptoms` | TEXT[] | DEFAULT '{}' | Tilt symptoms identified |
+| `push_token` | TEXT | | Expo push token |
+| `timezone` | TEXT | DEFAULT 'America/New_York' | |
+| `created_at` | TIMESTAMPTZ | NOT NULL | |
+| `updated_at` | TIMESTAMPTZ | NOT NULL, auto-updated | |
 
-**Trigger**: `on_auth_user_created` — automatically creates a profile row when a new user signs up.
+### 4.2 streaks
 
-### 2.2 streaks
-
-Tracks tilt-free streaks. Each active streak has `is_active = TRUE`. On relapse, the current streak is ended and a new one started.
-
-| Column | Type | Constraints | Description |
-|--------|------|-------------|-------------|
-| `id` | UUID | PK | |
-| `user_id` | UUID | FK → profiles(id), NOT NULL | |
-| `start_date` | DATE | NOT NULL, DEFAULT CURRENT_DATE | When this streak began |
-| `end_date` | DATE | | When this streak ended (NULL if active) |
-| `days` | INTEGER | DEFAULT 0 | Calculated on end |
-| `is_active` | BOOLEAN | DEFAULT TRUE | Only one active streak per user |
-| `ended_reason` | TEXT | | 'relapse' or 'manual_reset' |
-| `created_at` | TIMESTAMPTZ | DEFAULT NOW() | |
-
-**Index**: `idx_streaks_user_active` on `(user_id, is_active)` — fast lookup of current streak.
-
-### 2.3 journal_entries
+Each user has one active streak (`is_active = TRUE`). On relapse, the active streak is closed and a new one begins via the `reset_streak()` function.
 
 | Column | Type | Constraints | Description |
 |--------|------|-------------|-------------|
 | `id` | UUID | PK | |
-| `user_id` | UUID | FK → profiles(id), NOT NULL | |
-| `title` | TEXT | NOT NULL | Entry title |
-| `content` | TEXT | | Entry body |
-| `mood` | TEXT | CHECK IN ('great','good','neutral','bad','terrible') | |
-| `mood_emoji` | TEXT | | Emoji representation |
-| `tags` | TEXT[] | DEFAULT '{}' | ['Pre-Trade', 'Post-Trade', 'Tilt Reflection'] |
-| `created_at` | TIMESTAMPTZ | DEFAULT NOW() | |
-| `updated_at` | TIMESTAMPTZ | DEFAULT NOW() | |
-
-**Index**: `idx_journal_user_date` on `(user_id, created_at DESC)` — journal feed in reverse chronological order.
-
-### 2.4 urge_logs
-
-| Column | Type | Constraints | Description |
-|--------|------|-------------|-------------|
-| `id` | UUID | PK | |
-| `user_id` | UUID | FK → profiles(id), NOT NULL | |
-| `intensity` | INTEGER | CHECK 1-5 | 1=mild, 5=overwhelming |
-| `trigger` | TEXT | NOT NULL | What triggered the urge |
-| `location` | TEXT | | Where they were |
-| `is_alone` | BOOLEAN | | Were they alone |
-| `response` | TEXT[] | DEFAULT '{}' | Actions taken |
-| `resisted` | BOOLEAN | DEFAULT TRUE | Did they resist the urge |
-| `breathing_completed` | BOOLEAN | DEFAULT FALSE | Did they complete breathing exercise |
-| `notes` | TEXT | | Additional context |
-| `created_at` | TIMESTAMPTZ | DEFAULT NOW() | |
-
-**Index**: `idx_urges_user_date` on `(user_id, created_at DESC)`.
-
-### 2.5 goals + goal_checkins
-
-**goals**:
-| Column | Type | Constraints | Description |
-|--------|------|-------------|-------------|
-| `id` | UUID | PK | |
-| `user_id` | UUID | FK → profiles(id), NOT NULL | |
-| `title` | TEXT | NOT NULL | Goal name |
-| `is_custom` | BOOLEAN | DEFAULT FALSE | User-created vs preset |
+| `user_id` | UUID | FK → profiles, NOT NULL | |
+| `start_date` | DATE | NOT NULL | When this streak began |
+| `end_date` | DATE | | NULL while active |
+| `days` | INTEGER | DEFAULT 0 | Computed when streak ends |
 | `is_active` | BOOLEAN | DEFAULT TRUE | |
-| `created_at` | TIMESTAMPTZ | DEFAULT NOW() | |
+| `ended_reason` | TEXT | CHECK IN ('relapse', 'manual_reset') | |
+| `created_at` | TIMESTAMPTZ | | |
+| `updated_at` | TIMESTAMPTZ | | |
 
-**goal_checkins**:
-| Column | Type | Constraints | Description |
-|--------|------|-------------|-------------|
-| `id` | UUID | PK | |
-| `goal_id` | UUID | FK → goals(id), NOT NULL | |
-| `user_id` | UUID | FK → profiles(id), NOT NULL | |
-| `checked_date` | DATE | DEFAULT CURRENT_DATE | |
-| `completed` | BOOLEAN | DEFAULT TRUE | |
+**Indexes**: Partial index on `(user_id, is_active) WHERE is_active = TRUE` for instant current-streak lookup.
 
-**Constraint**: `UNIQUE(goal_id, checked_date)` — one check-in per goal per day.
+### 4.3 relapse_events
 
-**Index**: `idx_goal_checkins_date` on `(user_id, checked_date)`.
-
-### 2.6 daily_pledges
+**NEW TABLE** — Captures detailed context when a relapse occurs. Separate from streaks to enable pattern analysis (which triggers cause relapses, emotional states, market conditions).
 
 | Column | Type | Constraints | Description |
 |--------|------|-------------|-------------|
 | `id` | UUID | PK | |
-| `user_id` | UUID | FK → profiles(id), NOT NULL | |
-| `pledge_text` | TEXT | NOT NULL | The commitment text |
-| `signed_name` | TEXT | | Digital signature name |
-| `pledge_date` | DATE | DEFAULT CURRENT_DATE | |
-| `created_at` | TIMESTAMPTZ | DEFAULT NOW() | |
+| `user_id` | UUID | FK → profiles, NOT NULL | |
+| `streak_id` | UUID | FK → streaks | The streak that was broken |
+| `streak_days_lost` | INTEGER | DEFAULT 0 | How many days were lost |
+| `trigger_description` | TEXT | | Free-text description |
+| `trigger_category` | TEXT | CHECK IN (fomo, revenge_trade, overconfidence, boredom, news_event, social_pressure, financial_stress, other) | |
+| `emotional_state` | TEXT | CHECK IN (angry, anxious, frustrated, euphoric, fearful, impulsive, stressed, other) | |
+| `market_conditions` | TEXT | | What was happening in the market |
+| `was_trading` | BOOLEAN | DEFAULT TRUE | Were they actively trading |
+| `lesson_learned` | TEXT | | Reflection after relapse |
+| `severity` | INTEGER | CHECK 1-5 | How bad was it |
+| `created_at` | TIMESTAMPTZ | | |
 
-**Constraint**: `UNIQUE(user_id, pledge_date)` — one pledge per day.
+**Indexes**: `(user_id, created_at DESC)` for history, `(user_id, trigger_category)` for pattern analysis.
 
-### 2.7 daily_checkins
+### 4.4 goals + goal_checkins
 
-| Column | Type | Constraints | Description |
-|--------|------|-------------|-------------|
-| `id` | UUID | PK | |
-| `user_id` | UUID | FK → profiles(id), NOT NULL | |
-| `mood` | TEXT | CHECK IN ('great','good','neutral','bad','terrible') | |
-| `mood_score` | INTEGER | CHECK 1-5 | |
-| `notes` | TEXT | | |
-| `checkin_date` | DATE | DEFAULT CURRENT_DATE | |
-| `created_at` | TIMESTAMPTZ | DEFAULT NOW() | |
+Goals are selected during onboarding (presets) or created by the user (custom). Daily check-ins track whether each goal was completed that day.
 
-**Constraint**: `UNIQUE(user_id, checkin_date)` — one check-in per day.
+**goals**: Same as v1 plus `description`, `icon`, `color`, and `sort_order`.
 
-### 2.8 checklist_items + checklist_completions
+**goal_checkins**: One check-in per goal per day. `UNIQUE(goal_id, checked_date)`.
 
-Pre-trade checklist system. Users have default items and can add custom ones.
+### 4.5 daily_pledges
 
-**checklist_items**:
-| Column | Type | Constraints | Description |
-|--------|------|-------------|-------------|
-| `id` | UUID | PK | |
-| `user_id` | UUID | FK → profiles(id), NOT NULL | |
-| `title` | TEXT | NOT NULL | Checklist item text |
-| `is_custom` | BOOLEAN | DEFAULT FALSE | |
-| `sort_order` | INTEGER | DEFAULT 0 | Display order |
+One pledge per user per day. `UNIQUE(user_id, pledge_date)`.
 
-**checklist_completions**:
-| Column | Type | Constraints | Description |
-|--------|------|-------------|-------------|
-| `id` | UUID | PK | |
-| `item_id` | UUID | FK → checklist_items(id), NOT NULL | |
-| `user_id` | UUID | FK → profiles(id), NOT NULL | |
-| `completed_date` | DATE | DEFAULT CURRENT_DATE | |
+### 4.6 urge_logs
 
-**Constraint**: `UNIQUE(item_id, completed_date)`.
+Records each tilt urge with intensity (1-5), trigger type, coping responses, and whether the user resisted. Now includes `intensity_label`, `trigger_description`, and `duration_seconds`.
 
-### 2.9 badges + user_badges
+### 4.7 journal_entries
 
-**badges** (static reference table, seeded at deployment):
-| Column | Type | Constraints | Description |
-|--------|------|-------------|-------------|
-| `id` | UUID | PK | |
-| `name` | TEXT | UNIQUE, NOT NULL | Badge display name |
-| `description` | TEXT | | What it means |
-| `icon_name` | TEXT | | Icon identifier |
-| `requirement_type` | TEXT | | 'streak_days', 'urges_resisted', 'journal_entries', etc. |
-| `requirement_value` | INTEGER | | Number needed to earn |
-| `tier` | TEXT | DEFAULT 'bronze' | bronze, silver, gold, platinum, diamond |
+Trading journal with autosave support. Key additions in v2: `is_draft` flag for autosave, `is_pre_trade` / `is_post_trade` booleans for tag-based filtering, and `word_count` (auto-computed by trigger).
 
-**user_badges**:
-| Column | Type | Constraints | Description |
-|--------|------|-------------|-------------|
-| `id` | UUID | PK | |
-| `user_id` | UUID | FK → profiles(id), NOT NULL | |
-| `badge_id` | UUID | FK → badges(id), NOT NULL | |
-| `earned_at` | TIMESTAMPTZ | DEFAULT NOW() | |
+### 4.8 milestones + milestone_unlocks
 
-**Constraint**: `UNIQUE(user_id, badge_id)`.
+**milestones** (reference table — seeded at deployment): Defines all achievements. 27 milestones across 8 categories with bronze/silver/gold/platinum/diamond tiers and XP rewards.
 
-### 2.10 breathing_sessions
+**milestone_unlocks** (per-user): Tracks progress toward each milestone. `progress` stores the current count, `is_unlocked` flips to TRUE when the requirement is met, and `unlocked_at` records the exact timestamp.
 
-| Column | Type | Constraints | Description |
-|--------|------|-------------|-------------|
-| `id` | UUID | PK | |
-| `user_id` | UUID | FK → profiles(id), NOT NULL | |
-| `duration_seconds` | INTEGER | | How long the session lasted |
-| `cycles_completed` | INTEGER | | Number of breath cycles |
-| `context` | TEXT | | 'panic', 'urge_tracker', 'voluntary' |
-| `created_at` | TIMESTAMPTZ | DEFAULT NOW() | |
+The `calculate_milestone_progress()` function evaluates any milestone for a user and auto-upserts the unlock row.
 
-### 2.11 Community Tables
+### 4.9 breathing_sessions
 
-**posts**:
-| Column | Type | Constraints | Description |
-|--------|------|-------------|-------------|
-| `id` | UUID | PK | |
-| `user_id` | UUID | FK → profiles(id), NOT NULL | |
-| `title` | TEXT | | Optional title |
-| `content` | TEXT | NOT NULL | Post body |
-| `category` | TEXT | DEFAULT 'general' | wins, struggles, strategies, questions, general |
-| `likes_count` | INTEGER | DEFAULT 0 | Denormalized count |
-| `comments_count` | INTEGER | DEFAULT 0 | Denormalized count |
-| `created_at` | TIMESTAMPTZ | DEFAULT NOW() | |
-| `updated_at` | TIMESTAMPTZ | DEFAULT NOW() | |
+Now includes `session_type` (4-7-8, box, etc.) and `completed` boolean.
 
-**Index**: `idx_posts_category` on `(category, created_at DESC)`.
+### 4.10 game_sessions
 
-**comments**:
-| Column | Type | Constraints |
-|--------|------|-------------|
-| `id` | UUID | PK |
-| `post_id` | UUID | FK → posts(id) ON DELETE CASCADE |
-| `user_id` | UUID | FK → profiles(id) |
-| `content` | TEXT | NOT NULL |
-| `created_at` | TIMESTAMPTZ | DEFAULT NOW() |
+Now includes `level_reached` and `context` (voluntary, panic, urge_cooldown) to distinguish why the game was played.
 
-**post_likes**:
-| Column | Type | Constraints |
-|--------|------|-------------|
-| `id` | UUID | PK |
-| `post_id` | UUID | FK → posts(id) ON DELETE CASCADE |
-| `user_id` | UUID | FK → profiles(id) |
-| `created_at` | TIMESTAMPTZ | DEFAULT NOW() |
+### 4.11 app_sessions
 
-**Constraint**: `UNIQUE(post_id, user_id)`.
+**NEW TABLE** — Tracks when users open/close the app. Used for engagement analytics (DAU, session length, retention). `screens_visited` array logs the navigation path.
 
-### 2.12 pods + pod_members
+### 4.12 coach_conversations + coach_messages
 
-Accountability groups (called "Clans" in the prototype).
+**NEW TABLES** — AI Coach (Mika) history. Conversations group messages; each message has a `role` (user/assistant/system), content, token count, and response time.
 
-**pods**:
-| Column | Type | Constraints | Description |
-|--------|------|-------------|-------------|
-| `id` | UUID | PK | |
-| `name` | TEXT | NOT NULL | Pod name |
-| `description` | TEXT | | |
-| `creator_id` | UUID | FK → profiles(id) ON DELETE SET NULL | |
-| `max_members` | INTEGER | DEFAULT 8 | Small accountability groups |
-| `is_public` | BOOLEAN | DEFAULT TRUE | |
-| `created_at` | TIMESTAMPTZ | DEFAULT NOW() | |
+### 4.13 Community (posts, comments, post_likes, pods, pod_members, friendships)
 
-**pod_members**:
-| Column | Type | Constraints |
-|--------|------|-------------|
-| `id` | UUID | PK |
-| `pod_id` | UUID | FK → pods(id) ON DELETE CASCADE |
-| `user_id` | UUID | FK → profiles(id) ON DELETE CASCADE |
-| `role` | TEXT | DEFAULT 'member' — 'admin' or 'member' |
-| `joined_at` | TIMESTAMPTZ | DEFAULT NOW() |
+Same as v1 with additions: `is_anonymous` and `is_pinned` on posts, `likes_count` on comments, `avatar_url` and `trading_style` on pods. Counter triggers auto-update `likes_count`, `comments_count`, and `member_count`.
 
-**Constraint**: `UNIQUE(pod_id, user_id)`.
+### 4.14 subscriptions
 
-### 2.13 friendships
+Now uses ENUM types for `plan` and `status`. Added `trial_ends_at` and `product_id` fields for RevenueCat integration.
 
-| Column | Type | Constraints | Description |
-|--------|------|-------------|-------------|
-| `id` | UUID | PK | |
-| `requester_id` | UUID | FK → profiles(id), NOT NULL | Who sent the request |
-| `addressee_id` | UUID | FK → profiles(id), NOT NULL | Who received it |
-| `status` | TEXT | DEFAULT 'pending' | pending, accepted, blocked |
-| `created_at` | TIMESTAMPTZ | DEFAULT NOW() | |
+### 4.15 analytics_events
 
-**Constraint**: `UNIQUE(requester_id, addressee_id)`.
+**NEW TABLE** — Server-side event log for events fired from Edge Functions or webhooks (not from the client, which uses PostHog). JSONB `properties` column for flexible event data.
 
-### 2.14 game_sessions
+## 5. Database Functions
 
-| Column | Type | Constraints | Description |
-|--------|------|-------------|-------------|
-| `id` | UUID | PK | |
-| `user_id` | UUID | FK → profiles(id), NOT NULL | |
-| `game_type` | TEXT | NOT NULL | 'memory', 'stroop', 'math_blitz', 'scramble', 'findit', 'breath' |
-| `score` | INTEGER | DEFAULT 0 | |
-| `duration_seconds` | INTEGER | | |
-| `created_at` | TIMESTAMPTZ | DEFAULT NOW() | |
+### Streak Functions
 
-### 2.15 Settings Tables
+| Function | Parameters | Returns | Description |
+|----------|-----------|---------|-------------|
+| `get_current_streak(user_id)` | UUID | INTEGER | Days in the active streak |
+| `get_best_streak(user_id)` | UUID | INTEGER | Best streak ever (active or ended) |
+| `reset_streak(user_id, reason, trigger_cat, emotional_state, lesson)` | UUID + TEXT args | JSON | Ends streak, creates relapse_event, starts new streak. Returns `{relapse_id, days_lost, new_streak_id}` |
 
-**notification_preferences** (one row per user):
-| Column | Type | Default |
-|--------|------|---------|
-| `pre_market_reminder` | BOOLEAN | TRUE |
-| `post_market_reflection` | BOOLEAN | TRUE |
-| `daily_checkin` | BOOLEAN | TRUE |
-| `urge_cooldown_alert` | BOOLEAN | TRUE |
-| `streak_milestones` | BOOLEAN | TRUE |
-| `weekly_report` | BOOLEAN | TRUE |
-| `community_posts` | BOOLEAN | FALSE |
-| `direct_messages` | BOOLEAN | TRUE |
+### Stats Functions
 
-**privacy_settings** (one row per user):
-| Column | Type | Default |
-|--------|------|---------|
-| `profile_visible` | BOOLEAN | TRUE |
-| `show_streak` | BOOLEAN | TRUE |
-| `show_leaderboard` | BOOLEAN | TRUE |
-| `show_activity` | BOOLEAN | FALSE |
-| `analytics_opt_in` | BOOLEAN | TRUE |
+| Function | Parameters | Returns | Description |
+|----------|-----------|---------|-------------|
+| `get_user_stats(user_id)` | UUID | JSON | Dashboard stats: streak, best, relapses, urges, resist rate, journals, breathing, milestones, games, pledges, coach messages |
+| `get_weekly_goal_progress(user_id)` | UUID | JSON | Goal completion rate for the current week |
 
-### 2.16 subscriptions
+### Milestone Functions
 
-| Column | Type | Constraints | Description |
-|--------|------|-------------|-------------|
-| `id` | UUID | PK | |
-| `user_id` | UUID | FK → profiles(id), UNIQUE | One subscription record per user |
-| `plan` | TEXT | DEFAULT 'free' | free, monthly, yearly, lifetime |
-| `status` | TEXT | DEFAULT 'active' | active, cancelled, expired, trial |
-| `started_at` | TIMESTAMPTZ | DEFAULT NOW() | |
-| `expires_at` | TIMESTAMPTZ | | NULL for free/lifetime |
-| `revenue_cat_id` | TEXT | | RevenueCat customer ID |
-| `created_at` | TIMESTAMPTZ | DEFAULT NOW() | |
+| Function | Parameters | Returns | Description |
+|----------|-----------|---------|-------------|
+| `calculate_milestone_progress(user_id, slug)` | UUID, TEXT | JSON | Evaluates progress, upserts milestone_unlocks, returns `{milestone, current, required, unlocked, progress_pct}` |
 
-## 3. Database Functions
+### Session Functions
 
-### get_current_streak(user_id)
+| Function | Parameters | Returns | Description |
+|----------|-----------|---------|-------------|
+| `end_app_session(session_id)` | UUID | VOID | Marks app session as ended, computes duration |
 
-Returns the number of tilt-free days for the user's active streak.
+### Utility Functions
+
+| Function | Description |
+|----------|-------------|
+| `handle_new_user()` | Trigger: auto-creates profile, settings, subscription, and first streak on signup |
+| `update_updated_at()` | Trigger: auto-updates `updated_at` timestamp on row modification |
+| `compute_journal_word_count()` | Trigger: auto-computes word count on journal insert/update |
+| `update_post_likes_count()` | Trigger: increments/decrements `likes_count` on posts |
+| `update_post_comments_count()` | Trigger: increments/decrements `comments_count` on posts |
+| `update_pod_member_count()` | Trigger: increments/decrements `member_count` on pods |
+| `update_coach_message_count()` | Trigger: increments `message_count` on coach_conversations |
+
+## 6. Example Queries
+
+### Get current streak
 
 ```sql
-CREATE OR REPLACE FUNCTION get_current_streak(p_user_id UUID)
-RETURNS INTEGER AS $$
-  SELECT COALESCE(CURRENT_DATE - start_date, 0)
-  FROM streaks
-  WHERE user_id = p_user_id AND is_active = TRUE
-  ORDER BY created_at DESC LIMIT 1;
-$$ LANGUAGE sql SECURITY DEFINER;
+SELECT get_current_streak('user-uuid') AS streak_days;
+-- Returns: 23
 ```
 
-### reset_streak(user_id, reason)
-
-Ends the current streak and starts a new one (relapse flow).
+### Get full dashboard stats
 
 ```sql
-CREATE OR REPLACE FUNCTION reset_streak(p_user_id UUID, p_reason TEXT DEFAULT 'relapse')
-RETURNS VOID AS $$
-BEGIN
-  UPDATE streaks
-  SET is_active = FALSE, end_date = CURRENT_DATE,
-      days = CURRENT_DATE - start_date, ended_reason = p_reason
-  WHERE user_id = p_user_id AND is_active = TRUE;
-
-  INSERT INTO streaks (user_id, start_date, is_active)
-  VALUES (p_user_id, CURRENT_DATE, TRUE);
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+SELECT get_user_stats('user-uuid') AS stats;
+-- Returns JSON: { current_streak: 23, best_streak: 23, total_relapses: 1,
+--                 urges_resisted: 3, resist_rate: 75.0, journal_entries: 4, ... }
 ```
 
-### get_user_stats(user_id)
-
-Returns a JSON object with all key stats for the dashboard and sharing.
+### Log an urge event
 
 ```sql
-CREATE OR REPLACE FUNCTION get_user_stats(p_user_id UUID)
-RETURNS JSON AS $$
-  SELECT json_build_object(
-    'current_streak', COALESCE(get_current_streak(p_user_id), 0),
-    'best_streak', COALESCE((SELECT MAX(days) FROM streaks WHERE user_id = p_user_id), 0),
-    'total_relapses', (SELECT COUNT(*) FROM streaks WHERE user_id = p_user_id AND is_active = FALSE),
-    'urges_resisted', (SELECT COUNT(*) FROM urge_logs WHERE user_id = p_user_id AND resisted = TRUE),
-    'total_urges', (SELECT COUNT(*) FROM urge_logs WHERE user_id = p_user_id),
-    'journal_entries', (SELECT COUNT(*) FROM journal_entries WHERE user_id = p_user_id),
-    'breathing_sessions', (SELECT COUNT(*) FROM breathing_sessions WHERE user_id = p_user_id),
-    'badges_earned', (SELECT COUNT(*) FROM user_badges WHERE user_id = p_user_id)
-  );
-$$ LANGUAGE sql SECURITY DEFINER;
+INSERT INTO urge_logs (user_id, intensity, trigger_type, trigger_description, resisted, breathing_completed, response)
+VALUES (
+  'user-uuid', 4, 'fomo',
+  'Saw NQ spike 50 points without me',
+  TRUE, TRUE,
+  ARRAY['Breathing exercise', 'Walked away']
+) RETURNING id, created_at;
 ```
 
-## 4. Example Queries
-
-### Get dashboard data for a user
+### Save journal entry (with autosave)
 
 ```sql
--- Current streak + stats in one call
-SELECT get_user_stats('user-uuid-here') AS stats;
+-- First save (draft)
+INSERT INTO journal_entries (user_id, title, content, is_draft)
+VALUES ('user-uuid', 'Morning prep', 'Starting my review...', TRUE)
+RETURNING id;
 
--- Recent journal entries
-SELECT id, title, mood, mood_emoji, tags, created_at
-FROM journal_entries
-WHERE user_id = 'user-uuid-here'
-ORDER BY created_at DESC
-LIMIT 5;
+-- Autosave updates
+UPDATE journal_entries
+SET content = 'Starting my review. Key levels for NQ today are...',
+    is_draft = TRUE
+WHERE id = 'entry-uuid';
 
--- Today's goals with check-in status
-SELECT g.id, g.title,
+-- Final save
+UPDATE journal_entries
+SET content = 'Full entry text here...',
+    mood = 'good', mood_score = 4,
+    tags = ARRAY['Pre-Trade'],
+    is_pre_trade = TRUE, is_draft = FALSE
+WHERE id = 'entry-uuid';
+```
+
+### Reset streak after relapse
+
+```sql
+SELECT reset_streak(
+  'user-uuid',
+  'relapse',
+  'revenge_trade',
+  'angry',
+  'Never trade after a losing streak. Walk away.'
+) AS result;
+-- Returns: { relapse_id: "uuid", days_lost: 23, new_streak_id: "uuid" }
+```
+
+### Calculate milestone progress
+
+```sql
+SELECT calculate_milestone_progress('user-uuid', 'streak_14d') AS progress;
+-- Returns: { milestone: "Two Week Warrior", current: 23, required: 14,
+--            unlocked: true, progress_pct: 100.0 }
+```
+
+### Get today's goals with check-in status
+
+```sql
+SELECT g.id, g.title, g.icon, g.color,
   EXISTS(
     SELECT 1 FROM goal_checkins gc
     WHERE gc.goal_id = g.id AND gc.checked_date = CURRENT_DATE
   ) AS checked_today
 FROM goals g
-WHERE g.user_id = 'user-uuid-here' AND g.is_active = TRUE
-ORDER BY g.created_at;
+WHERE g.user_id = 'user-uuid' AND g.is_active = TRUE
+ORDER BY g.sort_order;
 ```
 
-### Get community feed
+### Get community feed with author info
 
 ```sql
-SELECT p.*, pr.trader_name, pr.avatar_url
+SELECT p.id, p.title, p.content, p.category, p.likes_count,
+  p.comments_count, p.created_at,
+  pr.trader_name, pr.avatar_url
 FROM posts p
 JOIN profiles pr ON p.user_id = pr.id
 WHERE p.category = 'wins'
-ORDER BY p.created_at DESC
-LIMIT 20 OFFSET 0;
+ORDER BY p.is_pinned DESC, p.created_at DESC
+LIMIT 20;
 ```
 
-### Get leaderboard (top streaks)
+### Get leaderboard (respects privacy settings)
 
 ```sql
 SELECT pr.trader_name, pr.avatar_url,
@@ -487,39 +394,101 @@ ORDER BY streak_days DESC
 LIMIT 10;
 ```
 
-### Weekly analytics
+### Weekly urge analytics
 
 ```sql
--- Urge frequency by day of week (last 30 days)
 SELECT
   EXTRACT(DOW FROM created_at) AS day_of_week,
   COUNT(*) AS urge_count,
-  AVG(intensity) AS avg_intensity,
-  SUM(CASE WHEN resisted THEN 1 ELSE 0 END)::FLOAT / COUNT(*) AS resist_rate
+  ROUND(AVG(intensity), 1) AS avg_intensity,
+  ROUND(COUNT(*) FILTER (WHERE resisted)::NUMERIC / NULLIF(COUNT(*), 0) * 100, 1) AS resist_pct
 FROM urge_logs
-WHERE user_id = 'user-uuid-here'
+WHERE user_id = 'user-uuid'
   AND created_at > NOW() - INTERVAL '30 days'
 GROUP BY day_of_week
 ORDER BY day_of_week;
 ```
 
-## 5. Migration Strategy
+### Get relapse patterns
 
-Migrations are managed via the Supabase CLI and stored in `supabase/migrations/`.
+```sql
+SELECT trigger_category, emotional_state,
+  COUNT(*) AS occurrences,
+  ROUND(AVG(streak_days_lost), 0) AS avg_days_lost
+FROM relapse_events
+WHERE user_id = 'user-uuid'
+GROUP BY trigger_category, emotional_state
+ORDER BY occurrences DESC;
+```
 
-| Migration | File | Description |
-|-----------|------|-------------|
-| 001 | `001_initial_schema.sql` | All tables, indexes, RLS, triggers, seed data (DONE) |
-| 002 | `002_add_coach_conversations.sql` | Coach conversation history table (planned) |
-| 003 | `003_add_chat_messages.sql` | Real-time chat for pods (post-MVP) |
+## 7. Row-Level Security Summary
 
-### Running Migrations
+| Pattern | Tables | Policy |
+|---------|--------|--------|
+| **Private (own data only)** | streaks, relapse_events, goals, goal_checkins, pledges, urge_logs, journal_entries, daily_checkins, checklists, milestone_unlocks, breathing, games, app_sessions, coach_*, settings | `auth.uid() = user_id` for all operations |
+| **Public read, own write** | profiles, posts, comments, post_likes, pods, pod_members | `SELECT USING (true)`, `INSERT/UPDATE/DELETE USING (auth.uid() = user_id)` |
+| **Public read only** | milestones | `SELECT USING (true)` — reference data, no user writes |
+| **Insert only** | analytics_events | `INSERT WITH CHECK (auth.uid() = user_id)` — no client reads |
+| **Read only** | subscriptions | `SELECT USING (auth.uid() = user_id)` — writes via webhook only |
+
+## 8. Indexes
+
+| Table | Index | Columns | Purpose |
+|-------|-------|---------|---------|
+| streaks | `idx_streaks_user_active` | `(user_id, is_active) WHERE is_active` | Instant current-streak lookup |
+| streaks | `idx_streaks_user_history` | `(user_id, created_at DESC)` | Streak history timeline |
+| relapse_events | `idx_relapse_user_date` | `(user_id, created_at DESC)` | Relapse history |
+| relapse_events | `idx_relapse_trigger` | `(user_id, trigger_category)` | Pattern analysis |
+| journal_entries | `idx_journal_user_date` | `(user_id, created_at DESC)` | Journal feed |
+| journal_entries | `idx_journal_drafts` | `(user_id, is_draft) WHERE is_draft` | Quick draft lookup |
+| urge_logs | `idx_urges_user_date` | `(user_id, created_at DESC)` | Urge history |
+| urge_logs | `idx_urges_resisted` | `(user_id, resisted)` | Resist rate queries |
+| goal_checkins | `idx_goal_checkins_user_date` | `(user_id, checked_date)` | Daily goal status |
+| posts | `idx_posts_category` | `(category, created_at DESC)` | Community feed |
+| milestone_unlocks | `idx_milestone_unlocks_recent` | `(user_id, unlocked_at DESC) WHERE is_unlocked` | Recent achievements |
+| app_sessions | `idx_app_sessions_active` | `(user_id, is_active) WHERE is_active` | Current session |
+| coach_messages | `idx_coach_messages_convo` | `(conversation_id, created_at ASC)` | Chat history |
+
+## 9. Migration & Deployment
+
+### Files
+
+| File | Purpose |
+|------|---------|
+| `database/schema.sql` | Complete schema — reference document |
+| `database/migrations/001_initial_schema.sql` | First migration (identical to schema.sql) |
+| `database/seed.sql` | Development seed data (3 users, sample data, all milestones) |
+
+### Running Locally
 
 ```bash
-# Local development
+# Start local Supabase
 supabase start
-supabase db reset  # Drops and recreates from migrations
 
-# Deploy to staging/production
-supabase db push --db-url "postgresql://..."
+# Reset and apply all migrations + seed
+supabase db reset
+
+# Or apply migration manually
+psql -h localhost -p 54322 -U postgres -d postgres -f database/migrations/001_initial_schema.sql
+psql -h localhost -p 54322 -U postgres -d postgres -f database/seed.sql
 ```
+
+### Deploying to Production
+
+```bash
+# Push migrations to remote Supabase project
+supabase db push
+
+# Or paste into Supabase SQL Editor in the dashboard
+```
+
+## 10. Design Decisions & Assumptions
+
+1. **UUID primary keys everywhere** — Compatible with Supabase auth.users IDs and prevents enumeration attacks.
+2. **ENUM types over CHECK constraints** — Better query performance and type safety for values that rarely change.
+3. **Denormalized counters** (likes_count, comments_count, member_count) — Maintained via triggers to avoid expensive COUNT queries on every page load.
+4. **Separate relapse_events table** — Streaks track duration; relapse_events track emotional context. This separation enables pattern analysis ("which triggers cause the longest streaks to break?").
+5. **Journal autosave via is_draft** — Entries with `is_draft = TRUE` are not counted in stats but are preserved for the user.
+6. **Partial indexes** — Used on `is_active = TRUE` columns to keep frequently-queried subsets fast.
+7. **No soft deletes** — ON DELETE CASCADE handles cleanup. GDPR deletion removes all user data via cascading foreign keys.
+8. **Analytics events table** — Supplements PostHog for server-side events only (webhooks, Edge Functions). Client events go directly to PostHog.
